@@ -93,7 +93,7 @@ const $=s=>document.querySelector(s);
 /* ---- genres: hint, ideal subject positions (normalized), 15s cut list ---- */
 const T3=[[1/3,1/3],[2/3,1/3],[1/3,2/3],[2/3,2/3]], C=[[.5,.5]];
 const GEN=[
- {id:'food',n:'料理',hint:'真上か斜め45°。窓の光を横から当てて、皿は交点へ。',t:[...C,...T3],shots:['全体を斜め45°で、湯気を見せる','真上から手が入る(取り分け・かける)','断面・チーズ・黄身のアップ','ひと口食べる、または引きで完成']},
+ {id:'food',n:'料理',hint:'皿の形に合わせる(立体は斜め、平たいものは真上)。光は窓から横に。カメラ側からの正面光は平らに写る。',t:[...C,...T3],shots:['全体を斜め45°で、湯気を見せる','真上から手が入る(取り分け・かける)','断面・チーズ・黄身のアップ','ひと口食べる、または引きで完成']},
  {id:'sweets',n:'スイーツ・飲み物',hint:'斜め30〜45°。注ぐ・すくう動きを入れる。氷は溶ける前に。',t:[[.5,.5],[.5,.4]],shots:['全体を斜めから','注ぐ・かける瞬間','断面・層のアップ','ひと口すくう']},
  {id:'shop',n:'店構え',hint:'正面から水平に。看板と入口を中央線に。電線・ゴミ箱は外す。',t:[[.5,.5],[.5,.42]],shots:['通りの端から歩いて近づく','扉を開けて入る後ろ姿','席から一品が運ばれてくる','看板を振り返って締める']},
  {id:'cafe',n:'店内',hint:'席の目線の高さ。窓を斜め前に。手前・奥の3層で撮る。',t:[...T3,...C],shots:['入口からゆっくり歩く','カウンターの手元作業','窓際でカップを置く','窓の外へパンして終わる']},
@@ -174,6 +174,19 @@ MORE.push(
  {n:'梅',g:6,k:['梅','うめ','梅の花','梅林'],p:-5,t:[[.5,.4]],hint:'枝と花を少し見上げて。背景は空か暗い幹にして、白やピンクを際立たせる。',shots:['枝を固定','花のアップ','鳥や風の動き','梅林を歩く']}
 );
 DISH.forEach(d=>d.g??=0);DISH.push(...MORE);
+/* hints revised after checking sources (see README). ev = the principle behind the hint was confirmed by a source;
+   the exact degrees are still rules of thumb. */
+const FIX={
+ '青空・雲':'上向き(約25°)。太陽は画面に入れない(空が白く飛ぶ)。空をタップして明るさスライダーを少し下げると青が濃くなる。前景のシルエットを下に入れる。',
+ '夕焼け・朝焼け':'空の明るい所をタップして露出を合わせ、スライダーを少し下げる。暗くなる部分は黒いシルエットとして活かす。水平線は下の三分割線に。',
+ '建物・神社仏閣':'見上げて撮ると上がすぼまって歪む。カメラを上に向けず水平に、一歩下がって撮る。手前に木や石灯籠を入れると奥行きが出る。',
+ '鳥居':'カメラを上に向けると鳥居がすぼまる。水平のまま少し離れて、左右対称に。中心を縦の中央線へ。人を小さく入れると大きさが伝わる。',
+ 'バラ・近接の花':'花に近づき、背景は無地に近い場所を選ぶ。近づくほど手ブレしやすいので、肘を体や机に付ける。逆光だと花びらが透ける。',
+ '花・植物':'近づくほど背景がぼけやすい。背景が散らかった所は避け、逆光なら花びらが透ける。',
+};
+const EV=new Set(['青空・雲','夕焼け・朝焼け','建物・神社仏閣','鳥居','バラ・近接の花','花・植物','ラーメン・麺類','カレー・シチュー','丼もの','寿司','パン・トースト','ハンバーガー','ピザ','ステーキ・肉料理','揚げ物','サラダ・ボウル','お弁当','餃子・点心','粉もの','オムライス・卵料理','おにぎり','サンドイッチ']);
+DISH.forEach(d=>{if(FIX[d.n])d.hint=FIX[d.n];d.ev=EV.has(d.n);});
+const hintText=d=>d.hint+(d.ev?' ✔考え方は資料で確認(角度の数値は目安)':' (経験則)');
 const CAT=[
  {c:'料理',n:'料理',g:0,p:45,t:[[.5,.5],[1/3,1/3],[2/3,2/3]],hint:'斜め45°か真上。窓の光を横から。皿は交点へ。',shots:['全体','動きや湯気','断面のアップ','ひと口']},
  {c:'建物',n:'建物・もの',g:6,p:3,t:[[.5,.5],[1/3,.5],[2/3,.5]],hint:'水平に、正面から。中心を縦の中央線に。手前に前景を。',shots:['全景を固定','細部のアップ','動きのある場面','引きで締め']},
@@ -189,7 +202,7 @@ let gen=GEN[0], fmt=FMT[1], facing='environment', stream=null;
 function chips(el,list,get,set){el.innerHTML='';list.forEach(x=>{const b=document.createElement('button');b.type='button';b.className='pill';b.textContent=x.n;
   b.setAttribute('aria-pressed',get()===x);b.onclick=()=>{set(x);[...el.children].forEach((c,i)=>c.setAttribute('aria-pressed',list[i]===x));if(el===$('#genres'))showHint();};el.appendChild(b);});}
 chips($('#genres'),GEN,()=>gen,x=>{gen=x;dish=null;$('#dish').value='';});chips($('#fmts'),FMT,()=>fmt,x=>fmt=x);
-const showHint=()=>$('#hint').textContent=dish?`【${dish.n}】${dish.hint}`:gen.hint; showHint();
+const showHint=()=>$('#hint').textContent=dish?`【${dish.n}】${hintText(dish)}`:gen.hint; showHint();
 const UNREG_KEY='shotcoach.unreg';
 function unregList(){try{return JSON.parse(localStorage.getItem(UNREG_KEY)||'[]')}catch(e){return[]}}
 function unregAdd(q){try{const l=unregList();if(!l.includes(q)){l.push(q);localStorage.setItem(UNREG_KEY,JSON.stringify(l.slice(-60)));}}catch(e){}}
@@ -201,7 +214,7 @@ async function unregCopy(btn){
 }
 function applyDish(d,label,note){
   dish=d;const base=GEN[d.g??0];gen={...base,n:d.n,t:d.t,shots:d.shots};sig='';
-  $('#hint').textContent=`【${label}】${note||d.hint}`;
+  $('#hint').textContent=`【${label}】${note||hintText(d)}`;
   [...$('#genres').children].forEach((c,i)=>c.setAttribute('aria-pressed',GEN[i]===base));$('#cats').hidden=true;
 }
 $('#dishForm').onsubmit=e=>{
