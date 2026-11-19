@@ -228,7 +228,10 @@ function loop(){
   const c=cropRect();
   if(fmt.r){ox.fillStyle='rgba(0,0,0,.55)';ox.fillRect(0,0,innerWidth,c.y);ox.fillRect(0,c.y+c.h,innerWidth,innerHeight-c.y-c.h);
     ox.fillRect(0,c.y,c.x,c.h);ox.fillRect(c.x+c.w,c.y,innerWidth-c.x-c.w,c.h);}
-  if(fmt.id==='reel'){ox.fillStyle='rgba(255,90,60,.2)';ox.fillRect(c.x,c.y,c.w,c.h*.14);ox.fillRect(c.x,c.y+c.h*.8,c.w,c.h*.2);}
+  if(fmt.id==='reel'){ox.fillStyle='rgba(255,90,60,.22)';ox.fillRect(c.x,c.y,c.w,c.h*.14);ox.fillRect(c.x,c.y+c.h*.65,c.w,c.h*.35);
+    ox.fillRect(c.x,c.y+c.h*.14,c.w*.06,c.h*.51);ox.fillRect(c.x+c.w*.94,c.y+c.h*.14,c.w*.06,c.h*.51);
+    ox.strokeStyle='rgba(255,210,63,.8)';ox.setLineDash([6,5]);ox.lineWidth=1.5;ox.strokeRect(c.x+c.w*.06,c.y+c.h*.14,c.w*.88,c.h*.51);ox.setLineDash([]);
+    ox.fillStyle='rgba(255,255,255,.85)';ox.font='bold 11px sans-serif';ox.textAlign='center';ox.fillText('文字・主役はこの枠の中に(公式: 上14% 下35% 左右6%)',c.x+c.w/2,c.y+c.h*.65-8);}
   ox.strokeStyle='rgba(255,255,255,.55)';ox.lineWidth=1;ox.beginPath();
   for(const k of [1/3,2/3]){ox.moveTo(c.x+c.w*k,c.y);ox.lineTo(c.x+c.w*k,c.y+c.h);ox.moveTo(c.x,c.y+c.h*k);ox.lineTo(c.x+c.w,c.y+c.h*k);}
   ox.stroke();
@@ -275,14 +278,22 @@ $('#mSave').onclick=async()=>{
 };
 
 /* ---- 15s recording with cut cues ---- */
-let rec=null,recT=null,chunks=[];
+let rec=null,recT=null,chunks=[],recRaf=0;
 $('#rec').onclick=()=>{
   if(rec){rec.stop();return;}
-  if(!stream||typeof MediaRecorder==='undefined'){$('#cue').textContent='このブラウザは動画撮影に未対応です';setTimeout(()=>$('#cue').textContent='',2500);return;}
+  const v=$('#v');
+  if(!stream||typeof MediaRecorder==='undefined'||!v.videoWidth){$('#cue').textContent='このブラウザは動画撮影に未対応です';setTimeout(()=>$('#cue').textContent='',2500);return;}
+  // reels are recorded 9:16 at 1080x1920, 30fps (Instagram's recommended Reels format)
+  fmt=FMT.find(f=>f.id==='reel');[...$('#fmts').children].forEach((c,i)=>c.setAttribute('aria-pressed',FMT[i]===fmt));
+  const cv=document.createElement('canvas');cv.width=1080;cv.height=1920;const cx=cv.getContext('2d');
+  const draw=()=>{const vw=v.videoWidth,vh=v.videoHeight,r=9/16;let sw=vw,sh=vh;
+    if(vw/vh>r)sw=vh*r;else sh=vw/r;cx.drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,1080,1920);recRaf=requestAnimationFrame(draw);};
+  draw();
+  const out=cv.captureStream(30);
   const mt=['video/mp4','video/webm;codecs=vp9','video/webm'].find(t=>MediaRecorder.isTypeSupported?.(t))||'';
-  chunks=[];rec=new MediaRecorder(stream,mt?{mimeType:mt}:undefined);
+  chunks=[];rec=new MediaRecorder(out,mt?{mimeType:mt,videoBitsPerSecond:8e6}:{videoBitsPerSecond:8e6});
   rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
-  rec.onstop=()=>{clearInterval(recT);$('#cue').textContent='';$('#clock').hidden=true;$('#rec').classList.remove('rec');$('#rec').innerHTML='15秒<br>動画';
+  rec.onstop=()=>{cancelAnimationFrame(recRaf);clearInterval(recT);$('#cue').textContent='';$('#clock').hidden=true;$('#rec').classList.remove('rec');$('#rec').innerHTML='15秒<br>動画';
     const type=rec.mimeType||'video/webm';rec=null;showResult(new Blob(chunks,{type}),`reel-${Date.now()}.${type.includes('mp4')?'mp4':'webm'}`,true);};
   rec.start();$('#rec').classList.add('rec');$('#rec').textContent='停止';$('#clock').hidden=false;
   const T=15,t0=performance.now(),N2=gen.shots.length;
