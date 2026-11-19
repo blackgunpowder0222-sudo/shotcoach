@@ -22,6 +22,7 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .dishrow input{flex:1;min-width:0;font:inherit;font-size:16px;color:#fff;background:var(--glass);border:1px solid #ffffff55;border-radius:99px;padding:9px 16px;outline-offset:2px}
 .dishrow input::placeholder{color:#ffffffaa}
 .dishrow button{flex:0 0 auto;border:0;background:var(--pink);color:#fff;font:inherit;font-weight:900;padding:0 18px;border-radius:99px;cursor:pointer}
+.cats{display:flex;gap:8px;flex-wrap:wrap}.cats[hidden]{display:none}
 .pills{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
 .pills::-webkit-scrollbar{display:none}
 .pill{flex:0 0 auto;border:1px solid #ffffff55;background:var(--glass);color:#fff;font:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:99px;cursor:pointer}
@@ -56,8 +57,9 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   <div class="hud"><div id="msgs" style="display:grid;gap:6px"></div><div class="hint" id="hint"></div></div>
   <div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
-    <form class="dishrow" id="dishForm" autocomplete="off"><input id="dish" list="dl" type="text" enterkeyhint="done" placeholder="料理名を入力 例: おにぎり" aria-label="料理名"><button type="submit">決定</button></form>
+    <form class="dishrow" id="dishForm" autocomplete="off"><input id="dish" list="dl" type="text" enterkeyhint="done" placeholder="被写体を入力 例: おにぎり・鳥居・青空" aria-label="被写体"><button type="submit">決定</button></form>
     <datalist id="dl"></datalist>
+    <div class="cats" id="cats" hidden></div>
     <div class="pills" id="genres" role="group" aria-label="被写体"></div>
     <div class="pills" id="fmts" role="group" aria-label="サイズ"></div>
     <div class="row">
@@ -127,13 +129,49 @@ let dish=null;
 const kata2hira=t=>t.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96)).replace(/\s+/g,'');
 function findDish(q){
   const x=kata2hira(q); if(!x)return null;
-  let hit=DISH.find(d=>d.k.some(k=>{const y=kata2hira(k);return x.includes(y)||y.includes(x)&&x.length>=2;}));
+  // best match = longest matching keyword across all subjects ("夕焼け空" -> 夕焼け, not 空)
+  let hit=null,best=0;
+  for(const d of DISH)for(const k of d.k){const y=kata2hira(k);const len=x.includes(y)?y.length:(y.includes(x)&&x.length>=2?x.length-0.5:0);if(len>best){best=len;hit=d;}}
   if(hit)return {d:hit,exact:true};
   const gen={'麺':/麺|めん|うどん|そば|ぱすた/,'丼':/丼|どん/,'パン':/ぱん|さんど/,'ケーキ':/けーき|あいす|ぷりん|ぱふぇ/,'飲み物':/のみもの|じゅーす|てぃー|ちゃ/};
   for(const [name,re] of Object.entries(gen)){ if(re.test(x)){ const h=DISH.find(d=>d.k.includes(name)||d.n.includes(name)||(name==='麺'&&d.n.startsWith('ラーメン'))||(name==='丼'&&d.n==='丼もの')||(name==='パン'&&d.n.startsWith('パン'))||(name==='ケーキ'&&d.n.startsWith('ケーキ'))||(name==='飲み物'&&d.n==='飲み物')); if(h)return {d:h,exact:false}; } }
   return null;
 }
-document.getElementById('dl').innerHTML=DISH.flatMap(d=>d.k.slice(0,3)).map(k=>`<option value="${k}">`).join('');
+
+const CEN=[[.5,.5]], SKY=[[1/3,.72],[2/3,.72],[.5,.7]], SIDE=[[1/3,.45],[2/3,.45]];
+const MORE=[
+ {n:'鳥居',g:6,k:['鳥居','とりい','神社','お宮','参道'],p:0,t:[[.5,.5],[.5,.56]],hint:'正面から水平に。左右対称にして鳥居の中心を縦の中央線へ。人を小さく入れると大きさが伝わる。',shots:['参道を歩いて近づく','鳥居を正面で4秒固定','くぐる後ろ姿','見上げて笠木と空で締める']},
+ {n:'扉・ドア',g:2,k:['扉','とびら','ドア','玄関','門','ゲート','入口','入り口'],p:0,t:CEN,hint:'真正面から水平に。中心を縦の中央線へ。取っ手や質感、ドアの前の影も入れる。',shots:['扉を正面で3秒固定','取っ手や表札のアップ','手で開ける','開けた先の景色']},
+ {n:'窓',g:3,k:['窓','まど','ステンドグラス'],p:0,t:CEN,hint:'正面から水平に。窓枠で絵を切り取る。外の明るさに引っ張られて暗くなるので、少し明るさを補正。',shots:['窓を正面で固定','カーテンや光の揺れ','外の景色にピント','窓辺の小物']},
+ {n:'階段・路地',g:6,k:['階段','かいだん','路地','ろじ','小道','トンネル','廊下','商店街'],p:8,t:[[.5,.45]],hint:'低めに構え、奥の消失点を中央に。左右の壁を対称にすると奥行きが出る。',shots:['入口から歩いて進む','足元のアップ','振り返って来た道','奥へ進む後ろ姿']},
+ {n:'建物・神社仏閣',g:6,k:['建物','たてもの','お寺','寺','神殿','本殿','城','塔','教会','駅','橋','ビル','タワー','社殿'],p:5,t:[[.5,.5],[1/3,.5],[2/3,.5]],hint:'少し離れて水平に。見上げすぎると歪む。手前に木や石灯籠を入れて奥行きを出す。',shots:['全景を4秒固定','屋根や彫刻のアップ','手前の木越しにパン','人が歩く引き']},
+ {n:'看板・ネオン',g:2,k:['看板','ネオン','サイン','のれん','暖簾','ポスター','落書き','壁画'],p:0,t:CEN,hint:'正面から水平に。夜は明るい文字が飛ぶので、画面をタップして露出を下げる。',shots:['看板を正面で3秒','文字のアップ','光が点く・揺れる','人が通り過ぎる']},
+ {n:'青空・雲',g:6,k:['青空','空','雲','くも','入道雲','飛行機雲','そら'],p:-25,t:SKY,hint:'上向き(約25°)。太陽は画面の外へ。木や建物のシルエットを下の1/3に入れると空が引き立つ。',shots:['雲の動きを4秒固定','見上げるようにパン','前景越しの空','日差しや鳥の動きで締める']},
+ {n:'夕焼け・朝焼け',g:6,k:['夕焼け','夕日','夕陽','朝焼け','日の出','日没','サンセット','マジックアワー'],p:2,t:[[2/3,.62],[1/3,.62]],hint:'ほぼ水平。水平線は下の三分割線に、太陽は交点へ。空が主役なら画面タップで少し暗めに。',shots:['空全体を固定','太陽が沈む・昇る動き','シルエットの人や建物','暗くなる最後の青い空']},
+ {n:'花・植物',g:6,k:['花','はな','桜','さくら','バラ','ひまわり','コスモス','あじさい','紫陽花','植物','緑','菜の花','チューリップ'],p:15,t:[[2/3,.4],[1/3,.6]],hint:'低め(約15°)。花に近づいて、背景を遠くにするとぼける。逆光で花びらが透ける。',shots:['全体から近づく','花のアップ','風で揺れる','ミツバチや水滴']},
+ {n:'紅葉・木漏れ日',g:6,k:['紅葉','もみじ','木漏れ日','落ち葉','銀杏','イチョウ','森','林','新緑'],p:-15,t:[[.5,.35],[2/3,.4]],hint:'見上げて(約15°)、太陽を葉で隠すと光が透ける。画面の端を暗くすると色が濃く見える。',shots:['見上げて葉の下から','木漏れ日が揺れる','落ち葉を踏む足元','道に光が差す引き']},
+ {n:'海・水辺',g:6,k:['海','うみ','川','湖','池','滝','波','ビーチ','水辺'],p:4,t:[[.5,.66],[1/3,.66],[2/3,.66]],hint:'水平線が傾くと一番目立つ。水平を必ず確認。波打ち際を前景に入れる。',shots:['水平線を固定','波が寄せる足元','空と海の境','歩く後ろ姿']},
+ {n:'雪景色',g:6,k:['雪','ゆき','雪景色','氷','霧氷','樹氷'],p:12,t:[[1/3,.55],[2/3,.55]],hint:'雪は暗く写りやすい。画面タップで少し明るく。足跡や木で目線を誘導。',shots:['全景を固定','降る雪をアップ','足跡や歩く姿','白い空と木で締め']},
+ {n:'夜景',g:6,k:['夜景','よる','夜','イルミネーション','花火','夜桜','ライトアップ'],p:3,t:[[.5,.6],[1/3,.6],[2/3,.6]],hint:'手ブレに注意。肘を体に付けるか、何かに乗せて固定。明るい光は白飛びしやすい。',shots:['全景を6秒固定','光のアップ','歩きながら','人の後ろ姿']},
+ {n:'山・遠景',g:6,k:['山','やま','富士山','丘','高原','草原','畑','田んぼ'],p:3,t:[[.5,.6],[1/3,.6]],hint:'水平。前景に道や草を入れると奥行きが出る。人を小さく。',shots:['全景を固定','歩く足元','手前の草や花','山にパン']},
+ {n:'人物(ポートレート)',g:5,k:['人物','ポートレート','人','顔','自撮り','友達','彼女','彼氏','家族','子供','子ども','赤ちゃん','カップル'],p:4,t:SIDE,hint:'胸〜目の高さ。顔は三分割の縦線に。目線の少し上から。窓や日陰の光で。',shots:['全身で歩く','表情のアップ','笑う瞬間','髪や手の動き']},
+ {n:'後ろ姿',g:5,k:['後ろ姿','うしろ姿','後姿','背中','シルエット'],p:3,t:[[1/3,.5],[2/3,.5]],hint:'人は三分割の縦線に。進む先に余白を空ける。',shots:['歩き出す後ろ','景色を見る','振り返る','遠ざかる引き']},
+ {n:'コーデ(全身)',g:5,k:['コーデ','ファッション','全身','服','ワンピース','服装','オーティーディー','ootd'],p:0,t:CEN,hint:'膝の高さから水平に。足元まで入れる。頭の上に少し余白を。',shots:['全身で歩いてくる','小物・靴のアップ','振り返る','ポーズで止める']},
+ {n:'犬・猫・動物',g:7,k:['犬','いぬ','猫','ねこ','ペット','うさぎ','鳥','動物','愛犬','愛猫','ハムスター'],p:6,t:[[.5,.5],[1/3,.45],[2/3,.45]],hint:'動物の目線まで下がる。フラッシュは使わない。目にピントを合わせる。',shots:['目線で全身が動く','顔のアップ','おやつに反応','寝顔・あくび']},
+ {n:'花束・花瓶',g:4,k:['花束','花瓶','ブーケ','フラワー','フラワーアレンジ','ドライフラワー'],p:20,t:[[.5,.5],[.5,.45]],hint:'やや低めから。無地の壁を背景に。窓の光を斜め後ろから。',shots:['全体','花のアップ','手で持つ・飾る','光に透ける']},
+ {n:'本・文房具',g:4,k:['本','ほん','雑誌','ノート','文房具','手帳','ペン','文庫','絵本','漫画'],p:85,t:CEN,hint:'真上(フラットレイ)。小物は3つまで。余白を残し、影が一方向になるよう窓の光を横から。',shots:['全体を真上から','ページをめくる','文字や紙のアップ','手を入れて書く']},
+ {n:'アクセサリー',g:4,k:['アクセサリー','指輪','リング','ネックレス','ピアス','時計','腕時計','ジュエリー'],p:40,t:[[.5,.5]],hint:'近づいて(マクロ)。反射を拾うので白い紙で光を回す。手に載せるとサイズ感が伝わる。',shots:['全体','手に載せて回す','光に当てて輝かせる','つけた姿']},
+ {n:'雑貨・ハンドメイド',g:4,k:['雑貨','ハンドメイド','器','食器','皿','陶器','カップ','バッグ','靴','小物','商品','キャンドル'],p:40,t:[[.5,.5],[1/3,.55]],hint:'斜め(約40°)。使っている場面も1枚。背景は無地で。',shots:['全体','手に取る・使う','質感のアップ','使い方の完成形']}
+];
+DISH.forEach(d=>d.g??=0);DISH.push(...MORE);
+const CAT=[
+ {c:'料理',n:'料理',g:0,p:45,t:[[.5,.5],[1/3,1/3],[2/3,2/3]],hint:'斜め45°か真上。窓の光を横から。皿は交点へ。',shots:['全体','動きや湯気','断面のアップ','ひと口']},
+ {c:'建物',n:'建物・もの',g:6,p:3,t:[[.5,.5],[1/3,.5],[2/3,.5]],hint:'水平に、正面から。中心を縦の中央線に。手前に前景を。',shots:['全景を固定','細部のアップ','動きのある場面','引きで締め']},
+ {c:'自然',n:'自然',g:6,p:5,t:[[1/3,.62],[2/3,.62]],hint:'水平線は三分割の線に。前景を入れて奥行きを出す。',shots:['全景を固定','近づいて細部','動き','引きで締め']},
+ {c:'人・動物',n:'人・動物',g:5,p:4,t:[[1/3,.45],[2/3,.45]],hint:'目線の高さ。顔は三分割の縦線に。窓や日陰の光で。',shots:['全身で動く','顔のアップ','表情','動きの余韻']},
+ {c:'小物',n:'小物・商品',g:4,p:40,t:[[.5,.5]],hint:'斜め(約40°)。背景は無地、余白を広く。',shots:['全体','手に取る','質感のアップ','使い方']}
+];
+document.getElementById('dl').innerHTML=DISH.flatMap(d=>d.k.slice(0,2)).map(k=>`<option value="${k}">`).join('');
 const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'grid',n:'グリッド 3:4',r:3/4},{id:'reel',n:'リール 9:16',r:9/16}];
 let gen=GEN[0], fmt=FMT[1], facing='environment', stream=null;
 
@@ -142,13 +180,19 @@ function chips(el,list,get,set){el.innerHTML='';list.forEach(x=>{const b=documen
   b.setAttribute('aria-pressed',get()===x);b.onclick=()=>{set(x);[...el.children].forEach((c,i)=>c.setAttribute('aria-pressed',list[i]===x));if(el===$('#genres'))showHint();};el.appendChild(b);});}
 chips($('#genres'),GEN,()=>gen,x=>{gen=x;dish=null;$('#dish').value='';});chips($('#fmts'),FMT,()=>fmt,x=>fmt=x);
 const showHint=()=>$('#hint').textContent=dish?`【${dish.n}】${dish.hint}`:gen.hint; showHint();
+function applyDish(d,label,note){
+  dish=d;const base=GEN[d.g??0];gen={...base,n:d.n,t:d.t,shots:d.shots};sig='';
+  $('#hint').textContent=`【${label}】${note||d.hint}`;
+  [...$('#genres').children].forEach((c,i)=>c.setAttribute('aria-pressed',GEN[i]===base));$('#cats').hidden=true;
+}
 $('#dishForm').onsubmit=e=>{
-  e.preventDefault();const q=$('#dish').value.trim();if(!q)return;
-  const r=findDish(q);$('#dish').blur();
-  const food=GEN[0];
-  if(r){dish=r.d;gen={...food,n:r.d.n,t:r.d.t,shots:r.d.shots};$('#hint').textContent=`【${r.exact?r.d.n:q+' → '+r.d.n+'に近いガイド'}】${r.d.hint}`;sig='';}
-  else{dish=null;gen=food;$('#hint').textContent=`「${q}」は未登録です。料理の一般ガイドを使います。`;}
-  [...$('#genres').children].forEach((c,i)=>c.setAttribute('aria-pressed',GEN[i]===food));
+  e.preventDefault();const q=$('#dish').value.trim();if(!q)return;$('#dish').blur();
+  const r=findDish(q);
+  if(r){applyDish(r.d,r.exact?r.d.n:q+' → '+r.d.n+'に近いガイド');return;}
+  // not registered: ask which kind it is
+  dish=null;$('#hint').textContent=`「${q}」は未登録です。近い種類を選んでください。`;
+  $('#cats').hidden=false;$('#cats').innerHTML=CAT.map((c,i)=>`<button type="button" class="pill" data-c="${i}">${c.c}</button>`).join('');
+  $('#cats').querySelectorAll('button').forEach(b=>b.onclick=()=>{const c=CAT[+b.dataset.c];applyDish({...c,n:q},q,`${c.c}の一般ガイド。`+c.hint);});
 };
 
 /* ---- camera ---- */
@@ -242,8 +286,9 @@ function evaluate(){
   }
   if(up&&dish){
     const pitch=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI, diff=pitch-dish.p;
-    if(Math.abs(diff)<=7)add('ok',`${dish.n}の角度OK(いま${pitch.toFixed(0)}° / 目標${dish.p}°)`);
-    else add(Math.abs(diff)<=15?'warn':'bad',diff>0?`もう少し水平に。あと約${Math.abs(diff).toFixed(0)}°(目標${dish.p}°)`:`もう少し下向きに。あと約${Math.abs(diff).toFixed(0)}°(目標${dish.p}°)`);
+    const fa=a=>a<0?`上向き${Math.round(-a)}°`:a>=1?`下向き${Math.round(a)}°`:'水平';
+    if(Math.abs(diff)<=7)add('ok',`${dish.n}の角度OK(いま${fa(pitch)} / 目標${fa(dish.p)})`);
+    else add(Math.abs(diff)<=15?'warn':'bad',`カメラをあと約${Math.abs(diff).toFixed(0)}°${diff>0?'上':'下'}に向けて(目標${fa(dish.p)})`);
   }
   if(A.ok){
     // light
@@ -257,7 +302,8 @@ function evaluate(){
     else if(A.ref>25&&A.lap<A.ref*.45)add('warn','ピントが甘いかも。画面をタップ、または少し離れて');
     else add('ok','ブレなし');
     // subject
-    if(A.subj){
+    if(dish&&dish.p<0){/* sky or canopy: no single subject to place */}
+    else if(A.subj){
       let best=null,bd=9;for(const t of gen.t){const dd=Math.hypot(A.subj.x-t[0],A.subj.y-t[1]);if(dd<bd){bd=dd;best=t;}}
       A.target=best;
       if(bd<.13)add('ok','主役が良い位置にいます');
