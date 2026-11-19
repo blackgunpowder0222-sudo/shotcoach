@@ -18,6 +18,10 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .msg.warn i{background:var(--warn)}.msg.bad i{background:var(--bad)}
 .hint{font-size:12px;font-weight:500;opacity:.9;background:var(--glass);padding:6px 12px;border-radius:10px;width:fit-content;max-width:100%}
 .ctrl{position:absolute;left:0;right:0;bottom:0;padding:12px max(12px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;gap:12px;background:linear-gradient(transparent,rgba(0,0,0,.55) 40%)}
+.dishrow{display:flex;gap:8px}
+.dishrow input{flex:1;min-width:0;font:inherit;font-size:16px;color:#fff;background:var(--glass);border:1px solid #ffffff55;border-radius:99px;padding:9px 16px;outline-offset:2px}
+.dishrow input::placeholder{color:#ffffffaa}
+.dishrow button{flex:0 0 auto;border:0;background:var(--pink);color:#fff;font:inherit;font-weight:900;padding:0 18px;border-radius:99px;cursor:pointer}
 .pills{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
 .pills::-webkit-scrollbar{display:none}
 .pill{flex:0 0 auto;border:1px solid #ffffff55;background:var(--glass);color:#fff;font:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:99px;cursor:pointer}
@@ -52,6 +56,8 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   <div class="hud"><div id="msgs" style="display:grid;gap:6px"></div><div class="hint" id="hint"></div></div>
   <div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
+    <form class="dishrow" id="dishForm" autocomplete="off"><input id="dish" list="dl" type="text" enterkeyhint="done" placeholder="料理名を入力 例: おにぎり" aria-label="料理名"><button type="submit">決定</button></form>
+    <datalist id="dl"></datalist>
     <div class="pills" id="genres" role="group" aria-label="被写体"></div>
     <div class="pills" id="fmts" role="group" aria-label="サイズ"></div>
     <div class="row">
@@ -94,14 +100,56 @@ const GEN=[
  {id:'view',n:'風景・旅',hint:'低めに構えて前景を入れる。水平線は三分割線に。',t:[...T3],shots:['足元を歩く','全景を4秒固定','小さな発見','夕焼けや夜景で締める']},
  {id:'pet',n:'ペット',hint:'動物の目線まで下がる。フラッシュは使わない。',t:[...T3,...C],shots:['目線で全身が動く','顔のアップ','おやつに反応','寝顔・あくび']}
 ];
+/* ---- dishes: camera pitch = degrees the camera points below horizontal (90 = straight down) ---- */
+const LO=[[1/3,2/3],[2/3,2/3],[.5,.58]], MID=[[.5,.5],[1/3,.5],[2/3,.5]], TOP=[[.5,.5],[1/3,1/3],[2/3,2/3]];
+const DISH=[
+ {n:'おにぎり',k:['おにぎり','おむすび','にぎり飯'],p:35,t:LO,hint:'斜め低め(約35°)。海苔の質感と、割った断面の具を見せる。',shots:['皿や竹皮に並んだ全体','手で持ち上げる','割って具を見せる(最重要)','ひと口かじる']},
+ {n:'サンドイッチ',k:['サンドイッチ','サンドウィッチ','サンド','サンドウイッチ'],p:40,t:[[.5,.52],[1/3,.55],[2/3,.55]],hint:'斜め(約40°)。断面を手前に向けて重ねる。具材の層が主役。',shots:['全体を斜めから','包丁で切る瞬間','断面を手前に向けて寄る','手に持って引きで']},
+ {n:'ラーメン・麺類',k:['ラーメン','らーめん','うどん','そば','蕎麦','つけ麺','パスタ','麺','そうめん','ちゃんぽん','焼きそば'],p:60,t:TOP,hint:'斜め上(約60°)。湯気と麺を持ち上げる瞬間が一番映える。丼の縁は拭く。',shots:['丼全体を斜め上から。湯気を見せる','レンゲや箸で麺を持ち上げる','具(卵・チャーシュー)のアップ','すする・ひと口']},
+ {n:'カレー・シチュー',k:['カレー','シチュー','ハヤシ','スープカレー'],p:55,t:MID,hint:'斜め(約55°)。ご飯とルーの境界、具のゴロッと感を見せる。',shots:['全体を斜めから','スプーンですくう','具のアップ','ひと口']},
+ {n:'丼もの',k:['丼','どんぶり','牛丼','海鮮丼','親子丼','カツ丼','天丼','ばらちらし','ちらし'],p:75,t:[[.5,.5]],hint:'ほぼ真上(約75°)。具材の彩りと盛りを見せる。中央に丼を。',shots:['真上から全体','具を箸で持ち上げる','たまごやタレをかける','ひと口']},
+ {n:'寿司',k:['寿司','すし','鮨','握り','巻き寿司','手巻'],p:35,t:LO,hint:'低め(約35°)。ネタのツヤを光で出す。醤油皿を斜め手前に。',shots:['並んだ全体','ネタのアップ','醤油をつける','口に運ぶ']},
+ {n:'パン・トースト',k:['パン','トースト','クロワッサン','食パン','ベーグル','フレンチトースト','パンケーキ','ホットケーキ'],p:45,t:MID,hint:'斜め(約45°)。割った断面、バターやシロップが落ちる瞬間を。',shots:['全体を斜めから','バターやシロップをかける','割る・切る','ひと口']},
+ {n:'ハンバーガー',k:['ハンバーガー','バーガー'],p:15,t:[[.5,.55]],hint:'ほぼ水平(約15°)。低く構えて層を見せる。半分に切った断面が主役。',shots:['全体を横から','手に持つ','半分に切る・断面','かぶりつく']},
+ {n:'ピザ',k:['ピザ','ぴざ'],p:85,t:[[.5,.5]],hint:'真上(約85°)。チーズが伸びる動きを動画で。1切れ持ち上げる。',shots:['真上から全体','1切れ持ち上げてチーズを伸ばす','具のアップ','ひと口']},
+ {n:'ステーキ・肉料理',k:['ステーキ','ハンバーグ','焼肉','肉','とんかつ','カツ','ローストビーフ','焼き鳥','やきとり'],p:40,t:MID,hint:'斜め(約40°)。切った断面のピンク色と肉汁を見せる。',shots:['全体を斜めから','ナイフで切る','断面のアップ','ひと口']},
+ {n:'揚げ物',k:['唐揚げ','からあげ','から揚げ','天ぷら','フライ','コロッケ','フライドチキン','揚げ'],p:40,t:MID,hint:'斜め(約40°)。衣のザクザク感と断面。揚げたてで撮る。',shots:['全体','割る・かじる断面','レモンをかける','ひと口']},
+ {n:'サラダ・ボウル',k:['サラダ','ボウル','ヨーグルト','グラノーラ','スムージーボウル'],p:85,t:[[.5,.5]],hint:'真上(約85°)。色を散らして盛る。緑と赤など補色を入れる。',shots:['真上から全体','ドレッシングをかける','具のアップ','混ぜる']},
+ {n:'ケーキ・スイーツ',k:['ケーキ','タルト','プリン','パフェ','アイス','クレープ','ドーナツ','ショートケーキ','チーズケーキ','かき氷','和菓子','大福'],p:35,t:[[.5,.55],[1/3,.55]],hint:'低め(約35°)。断面と層、フォークで切る瞬間を撮る。',shots:['全体を斜めから','フォークを入れる','断面のアップ','ひと口']},
+ {n:'飲み物',k:['コーヒー','ラテ','カフェラテ','紅茶','ジュース','ソーダ','ビール','ワイン','カクテル','ドリンク','タピオカ','スムージー','お茶'],p:30,t:[[.5,.5],[.5,.42]],hint:'低め(約30°)。グラスの透け感を窓の光で。注ぐ動きを入れる。',shots:['全体','注ぐ・混ぜる','グラスのアップ(氷・泡)','ひと口']},
+ {n:'お弁当',k:['弁当','べんとう','ランチボックス','おせち'],p:85,t:[[.5,.5]],hint:'真上(約85°)。色の配置と、仕切りで整える。',shots:['ふたを開ける','真上から全体','おかずのアップ','箸でつまむ']},
+ {n:'餃子・点心',k:['餃子','ぎょうざ','焼売','シュウマイ','小籠包','春巻'],p:50,t:MID,hint:'斜め(約50°)。焼き目と湯気。ひとつ割って肉汁を見せる。',shots:['全体','たれをつける','割って肉汁','ひと口']},
+ {n:'粉もの',k:['お好み焼き','たこ焼き','もんじゃ','たこやき'],p:50,t:MID,hint:'斜め(約50°)。かつおぶしが踊る動きと、ソースのツヤ。',shots:['全体','ソース・マヨをかける','かつおぶし','ひと口']},
+ {n:'オムライス・卵料理',k:['オムライス','卵','たまご','オムレツ','だし巻き','目玉焼き','茶碗蒸し'],p:50,t:MID,hint:'斜め(約50°)。卵を割る・開く瞬間がハイライト。',shots:['全体','ナイフを入れて開く','とろっと広がる','ひと口']},
+ {n:'フルーツ',k:['フルーツ','果物','いちご','みかん','りんご','ぶどう','桃','スイカ'],p:60,t:MID,hint:'斜め上(約60°)。断面と水滴。自然光でみずみずしく。',shots:['全体','切る','断面のアップ','ひと口']}
+];
+let dish=null;
+const kata2hira=t=>t.normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96)).replace(/\s+/g,'');
+function findDish(q){
+  const x=kata2hira(q); if(!x)return null;
+  let hit=DISH.find(d=>d.k.some(k=>{const y=kata2hira(k);return x.includes(y)||y.includes(x)&&x.length>=2;}));
+  if(hit)return {d:hit,exact:true};
+  const gen={'麺':/麺|めん|うどん|そば|ぱすた/,'丼':/丼|どん/,'パン':/ぱん|さんど/,'ケーキ':/けーき|あいす|ぷりん|ぱふぇ/,'飲み物':/のみもの|じゅーす|てぃー|ちゃ/};
+  for(const [name,re] of Object.entries(gen)){ if(re.test(x)){ const h=DISH.find(d=>d.k.includes(name)||d.n.includes(name)||(name==='麺'&&d.n.startsWith('ラーメン'))||(name==='丼'&&d.n==='丼もの')||(name==='パン'&&d.n.startsWith('パン'))||(name==='ケーキ'&&d.n.startsWith('ケーキ'))||(name==='飲み物'&&d.n==='飲み物')); if(h)return {d:h,exact:false}; } }
+  return null;
+}
+document.getElementById('dl').innerHTML=DISH.flatMap(d=>d.k.slice(0,3)).map(k=>`<option value="${k}">`).join('');
 const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'grid',n:'グリッド 3:4',r:3/4},{id:'reel',n:'リール 9:16',r:9/16}];
 let gen=GEN[0], fmt=FMT[1], facing='environment', stream=null;
 
 /* ---- UI chips ---- */
 function chips(el,list,get,set){el.innerHTML='';list.forEach(x=>{const b=document.createElement('button');b.type='button';b.className='pill';b.textContent=x.n;
   b.setAttribute('aria-pressed',get()===x);b.onclick=()=>{set(x);[...el.children].forEach((c,i)=>c.setAttribute('aria-pressed',list[i]===x));if(el===$('#genres'))showHint();};el.appendChild(b);});}
-chips($('#genres'),GEN,()=>gen,x=>gen=x);chips($('#fmts'),FMT,()=>fmt,x=>fmt=x);
-const showHint=()=>$('#hint').textContent=gen.hint; showHint();
+chips($('#genres'),GEN,()=>gen,x=>{gen=x;dish=null;$('#dish').value='';});chips($('#fmts'),FMT,()=>fmt,x=>fmt=x);
+const showHint=()=>$('#hint').textContent=dish?`【${dish.n}】${dish.hint}`:gen.hint; showHint();
+$('#dishForm').onsubmit=e=>{
+  e.preventDefault();const q=$('#dish').value.trim();if(!q)return;
+  const r=findDish(q);$('#dish').blur();
+  const food=GEN[0];
+  if(r){dish=r.d;gen={...food,n:r.d.n,t:r.d.t,shots:r.d.shots};$('#hint').textContent=`【${r.exact?r.d.n:q+' → '+r.d.n+'に近いガイド'}】${r.d.hint}`;sig='';}
+  else{dish=null;gen=food;$('#hint').textContent=`「${q}」は未登録です。料理の一般ガイドを使います。`;}
+  [...$('#genres').children].forEach((c,i)=>c.setAttribute('aria-pressed',GEN[i]===food));
+};
 
 /* ---- camera ---- */
 async function startCam(){
@@ -189,8 +237,13 @@ function evaluate(){
       else add(Math.abs(roll)<4?'warn':'bad',`${roll>0?'右':'左'}に${Math.abs(roll).toFixed(0)}°傾いています`);
     }else{
       const down=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI;
-      add('ok',`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`);
+      if(!dish)add('ok',`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`);
     }
+  }
+  if(up&&dish){
+    const pitch=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI, diff=pitch-dish.p;
+    if(Math.abs(diff)<=7)add('ok',`${dish.n}の角度OK(いま${pitch.toFixed(0)}° / 目標${dish.p}°)`);
+    else add(Math.abs(diff)<=15?'warn':'bad',diff>0?`もう少し水平に。あと約${Math.abs(diff).toFixed(0)}°(目標${dish.p}°)`:`もう少し下向きに。あと約${Math.abs(diff).toFixed(0)}°(目標${dish.p}°)`);
   }
   if(A.ok){
     // light
