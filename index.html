@@ -195,7 +195,7 @@ const CAT=[
  {c:'小物',n:'小物・商品',g:4,p:40,t:[[.5,.5]],hint:'斜め(約40°)。背景は無地、余白を広く。',shots:['全体','手に取る','質感のアップ','使い方']}
 ];
 document.getElementById('dl').innerHTML=DISH.flatMap(d=>d.k.slice(0,2)).map(k=>`<option value="${k}">`).join('');
-const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'grid',n:'グリッド 3:4(参考)',r:3/4},{id:'reel',n:'リール 9:16',r:9/16},{id:'story',n:'ストーリー 9:16',r:9/16},{id:'wide',n:'フィード横 1.91:1',r:1.91}];
+const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'reel',n:'リール 9:16',r:9/16},{id:'story',n:'ストーリー 9:16',r:9/16},{id:'wide',n:'フィード横 1.91:1',r:1.91}];
 let gen=GEN[0], fmt=FMT[1], facing='environment', stream=null;
 
 /* ---- UI chips ---- */
