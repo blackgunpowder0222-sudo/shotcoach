@@ -182,7 +182,7 @@ const CAT=[
  {c:'小物',n:'小物・商品',g:4,p:40,t:[[.5,.5]],hint:'斜め(約40°)。背景は無地、余白を広く。',shots:['全体','手に取る','質感のアップ','使い方']}
 ];
 document.getElementById('dl').innerHTML=DISH.flatMap(d=>d.k.slice(0,2)).map(k=>`<option value="${k}">`).join('');
-const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'grid',n:'グリッド 3:4',r:3/4},{id:'reel',n:'リール 9:16',r:9/16}];
+const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'grid',n:'グリッド 3:4',r:3/4},{id:'reel',n:'リール 9:16',r:9/16},{id:'story',n:'ストーリー 9:16',r:9/16}];
 let gen=GEN[0], fmt=FMT[1], facing='environment', stream=null;
 
 /* ---- UI chips ---- */
@@ -347,10 +347,11 @@ function loop(){
   const c=cropRect();
   if(fmt.r){ox.fillStyle='rgba(0,0,0,.55)';ox.fillRect(0,0,innerWidth,c.y);ox.fillRect(0,c.y+c.h,innerWidth,innerHeight-c.y-c.h);
     ox.fillRect(0,c.y,c.x,c.h);ox.fillRect(c.x+c.w,c.y,innerWidth-c.x-c.w,c.h);}
-  if(fmt.id==='reel'){ox.fillStyle='rgba(255,90,60,.22)';ox.fillRect(c.x,c.y,c.w,c.h*.14);ox.fillRect(c.x,c.y+c.h*.65,c.w,c.h*.35);
-    ox.fillRect(c.x,c.y+c.h*.14,c.w*.06,c.h*.51);ox.fillRect(c.x+c.w*.94,c.y+c.h*.14,c.w*.06,c.h*.51);
-    ox.strokeStyle='rgba(255,210,63,.8)';ox.setLineDash([6,5]);ox.lineWidth=1.5;ox.strokeRect(c.x+c.w*.06,c.y+c.h*.14,c.w*.88,c.h*.51);ox.setLineDash([]);
-    ox.fillStyle='rgba(255,255,255,.85)';ox.font='bold 11px sans-serif';ox.textAlign='center';ox.fillText('文字・主役はこの枠の中に(公式: 上14% 下35% 左右6%)',c.x+c.w/2,c.y+c.h*.65-8);}
+  const Z={reel:{t:.14,b:.35,s:.06,l:'公式: 上14% 下35% 左右6%'},story:{t:.14,b:.20,s:0,l:'公式: 上14% 下20%'}}[fmt.id];
+  if(Z){const by=1-Z.b-Z.t;ox.fillStyle='rgba(255,90,60,.22)';ox.fillRect(c.x,c.y,c.w,c.h*Z.t);ox.fillRect(c.x,c.y+c.h*(1-Z.b),c.w,c.h*Z.b);
+    if(Z.s){ox.fillRect(c.x,c.y+c.h*Z.t,c.w*Z.s,c.h*by);ox.fillRect(c.x+c.w*(1-Z.s),c.y+c.h*Z.t,c.w*Z.s,c.h*by);}
+    ox.strokeStyle='rgba(255,210,63,.8)';ox.setLineDash([6,5]);ox.lineWidth=1.5;ox.strokeRect(c.x+c.w*Z.s,c.y+c.h*Z.t,c.w*(1-2*Z.s),c.h*by);ox.setLineDash([]);
+    ox.fillStyle='rgba(255,255,255,.85)';ox.font='bold 11px sans-serif';ox.textAlign='center';ox.fillText('文字・主役はこの枠の中に('+Z.l+')',c.x+c.w/2,c.y+c.h*(1-Z.b)-8);}
   ox.strokeStyle='rgba(255,255,255,.55)';ox.lineWidth=1;ox.beginPath();
   for(const k of [1/3,2/3]){ox.moveTo(c.x+c.w*k,c.y);ox.lineTo(c.x+c.w*k,c.y+c.h);ox.moveTo(c.x,c.y+c.h*k);ox.lineTo(c.x+c.w,c.y+c.h*k);}
   ox.stroke();
@@ -403,7 +404,7 @@ $('#rec').onclick=()=>{
   const v=$('#v');
   if(!stream||typeof MediaRecorder==='undefined'||!v.videoWidth){$('#cue').textContent='このブラウザは動画撮影に未対応です';setTimeout(()=>$('#cue').textContent='',2500);return;}
   // reels are recorded 9:16 at 1080x1920, 30fps (Instagram's recommended Reels format)
-  fmt=FMT.find(f=>f.id==='reel');[...$('#fmts').children].forEach((c,i)=>c.setAttribute('aria-pressed',FMT[i]===fmt));
+  if(fmt.id!=='reel'&&fmt.id!=='story')fmt=FMT.find(f=>f.id==='reel');[...$('#fmts').children].forEach((c,i)=>c.setAttribute('aria-pressed',FMT[i]===fmt));
   const cv=document.createElement('canvas');cv.width=1080;cv.height=1920;const cx=cv.getContext('2d');
   const draw=()=>{const vw=v.videoWidth,vh=v.videoHeight,r=9/16;let sw=vw,sh=vh;
     if(vw/vh>r)sw=vh*r;else sh=vw/r;cx.drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,1080,1920);recRaf=requestAnimationFrame(draw);};
