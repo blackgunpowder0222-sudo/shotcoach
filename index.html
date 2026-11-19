@@ -16,6 +16,16 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .msg{display:flex;align-items:center;gap:8px;background:var(--glass);padding:7px 12px;border-radius:12px;font-size:14px;font-weight:700;backdrop-filter:blur(6px);width:fit-content;max-width:100%}
 .msg i{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:var(--ok)}
 .msg.warn i{background:var(--warn)}.msg.bad i{background:var(--bad)}
+.now{font-size:17px;font-weight:900;background:var(--pink);padding:9px 14px;border-radius:14px;width:fit-content;max-width:100%;box-shadow:0 4px 16px #0006;text-wrap:balance}
+.now.ok{background:#1f9d6a}.now.auto{background:#e8a400;color:#1b1233}
+#msgs{display:flex!important;flex-wrap:wrap;gap:6px}
+#msgs .msg{font-size:12px;padding:4px 10px;border-radius:99px}
+#msgs .msg i{width:8px;height:8px}
+.tools{position:absolute;right:max(10px,env(safe-area-inset-right));top:calc(150px + env(safe-area-inset-top));display:grid;gap:8px}
+.tool{width:56px;min-height:50px;border-radius:14px;border:1px solid #ffffff55;background:var(--glass);color:#fff;font:inherit;font-size:11px;font-weight:700;line-height:1.25;cursor:pointer;padding:4px}
+.tool[aria-pressed="true"]{background:var(--pink);border-color:var(--pink)}
+.zoomrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}.zoomrow[hidden]{display:none}
+.zoomrow input{flex:1;accent-color:var(--pink)}
 .hint{font-size:12px;font-weight:500;opacity:.9;background:var(--glass);padding:6px 12px;border-radius:10px;width:fit-content;max-width:100%}
 .ctrl{position:absolute;left:0;right:0;bottom:0;padding:12px max(12px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;gap:12px;background:linear-gradient(transparent,rgba(0,0,0,.55) 40%)}
 .dishrow{display:flex;gap:8px}
@@ -54,7 +64,16 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 <div id="stage">
   <video id="v" playsinline muted autoplay></video>
   <canvas id="ov"></canvas>
-  <div class="hud"><div id="msgs" style="display:grid;gap:6px"></div><div class="hint" id="hint"></div></div>
+  <div class="hud"><div class="now" id="now">カメラを準備中…</div><div id="msgs"></div><div class="hint" id="hint"></div></div>
+  <div class="tools" id="tools">
+    <button class="tool" type="button" id="tZebra" aria-pressed="false">白飛び<br>表示</button>
+    <button class="tool" type="button" id="tPeak" aria-pressed="false">ピント<br>表示</button>
+    <button class="tool" type="button" id="tRef" aria-pressed="false">お手本<br>を選ぶ</button>
+    <button class="tool" type="button" id="tGhost" aria-pressed="false" hidden>重ねる<br>ON/OFF</button>
+    <button class="tool" type="button" id="tAuto" aria-pressed="false">オート<br>撮影</button>
+    <button class="tool" type="button" id="tTorch" aria-pressed="false" hidden>ライト</button>
+    <input type="file" id="refFile" accept="image/*" hidden>
+  </div>
   <div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
     <form class="dishrow" id="dishForm" autocomplete="off"><input id="dish" list="dl" type="text" enterkeyhint="done" placeholder="被写体を入力 例: おにぎり・鳥居・青空" aria-label="被写体"><button type="submit">決定</button></form>
@@ -62,6 +81,7 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
     <div class="cats" id="cats" hidden></div>
     <div class="pills" id="genres" role="group" aria-label="被写体"></div>
     <div class="pills" id="fmts" role="group" aria-label="サイズ"></div>
+    <div class="zoomrow" id="zoomRow" hidden><span>ズーム</span><input type="range" id="zoom" aria-label="ズーム"><span id="zoomVal">1.0×</span></div>
     <div class="row">
       <button class="side" id="flip" type="button">反転</button>
       <button class="shutter" id="shot" type="button" aria-label="撮影"></button>
@@ -85,7 +105,7 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 
 <div class="modal" id="modal">
   <div id="prev"></div>
-  <div class="row"><button class="b2" id="mClose" type="button">閉じる</button><button class="b1" id="mSave" type="button">保存・共有</button></div>
+  <div class="row"><button class="b2" id="mClose" type="button">閉じる</button><button class="b2" id="mGhost" type="button">次に重ねる</button><button class="b1" id="mSave" type="button">保存・共有</button></div>
 </div>
 
 <script>
@@ -233,6 +253,21 @@ async function startCam(){
   if(stream)stream.getTracks().forEach(t=>t.stop());
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
   const v=$('#v');v.srcObject=stream;await v.play();
+  setupControls();
+}
+let torchOn=false;
+function setupControls(){
+  const track=stream?.getVideoTracks?.()[0];let caps={};
+  try{caps=track?.getCapabilities?.()||{};}catch(e){}
+  const zr=$('#zoomRow'),z=$('#zoom');
+  if(caps.zoom&&caps.zoom.max>caps.zoom.min){
+    z.min=caps.zoom.min;z.max=Math.min(caps.zoom.max,10);z.step=caps.zoom.step||0.1;
+    const cur=track.getSettings?.().zoom??caps.zoom.min;z.value=cur;$('#zoomVal').textContent=(+cur).toFixed(1)+'×';zr.hidden=false;
+    z.oninput=()=>{$('#zoomVal').textContent=(+z.value).toFixed(1)+'×';track.applyConstraints({advanced:[{zoom:+z.value}]}).catch(()=>{});};
+  }else zr.hidden=true;
+  const tb=$('#tTorch');torchOn=false;tb.setAttribute('aria-pressed','false');
+  if(caps.torch){tb.hidden=false;tb.onclick=()=>{torchOn=!torchOn;track.applyConstraints({advanced:[{torch:torchOn}]}).then(()=>tb.setAttribute('aria-pressed',torchOn)).catch(()=>{torchOn=false;});};}
+  else tb.hidden=true;
 }
 $('#go').onclick=async()=>{
   const err=$('#err');err.textContent='';
@@ -271,6 +306,34 @@ function srcRect(c){
   return {x:(c.x-ox)/s,y:(c.y-oy)/s,w:c.w/s,h:c.h/s};
 }
 
+/* ---- tools state ---- */
+const T={zebra:false,peak:false,auto:false,ghost:false};
+let ghostImg=null,mkReady=false;
+const mk=document.createElement('canvas'),mctx=mk.getContext('2d'),fx=document.createElement('canvas'),fctx=fx.getContext('2d',{willReadFrequently:true});
+function buildMask(v,s){
+  const W=180,H=Math.max(40,Math.min(400,Math.round(W*s.h/s.w)));
+  if(fx.width!==W||fx.height!==H){fx.width=mk.width=W;fx.height=mk.height=H;}
+  fctx.drawImage(v,s.x,s.y,s.w,s.h,0,0,W,H);
+  const d=fctx.getImageData(0,0,W,H).data,L=new Float32Array(W*H),out=mctx.createImageData(W,H),o=out.data;
+  for(let i=0;i<W*H;i++)L[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
+  if(T.zebra){for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(L[i]>242&&((x+y)>>2)%2===0){o[i*4]=255;o[i*4+1]=40;o[i*4+2]=90;o[i*4+3]=220;}}}
+  if(T.peak){
+    const M=new Float32Array(W*H),hist=new Uint32Array(256);
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;
+      const gx=L[i-W+1]+2*L[i+1]+L[i+W+1]-L[i-W-1]-2*L[i-1]-L[i+W-1],gy=L[i+W-1]+2*L[i+W]+L[i+W+1]-L[i-W-1]-2*L[i-W]-L[i-W+1];
+      const m=Math.hypot(gx,gy);M[i]=m;hist[Math.min(255,m>>2)]++;}
+    let acc=0,th=255;const need=W*H*.06;for(let k=255;k>=0;k--){acc+=hist[k];if(acc>=need){th=k;break;}}
+    const thr=Math.max(90,th*4);
+    for(let i=0;i<W*H;i++)if(M[i]>=thr&&!o[i*4+3]){o[i*4]=60;o[i*4+1]=255;o[i*4+2]=130;o[i*4+3]=235;}
+  }
+  mctx.putImageData(out,0,0);mkReady=true;
+}
+function toggleTool(id,key){const b=$(id);b.onclick=()=>{T[key]=!T[key];b.setAttribute('aria-pressed',T[key]);if(!T.zebra&&!T.peak)mkReady=false;sig='';};}
+toggleTool('#tZebra','zebra');toggleTool('#tPeak','peak');toggleTool('#tAuto','auto');toggleTool('#tGhost','ghost');
+function setGhost(src){const im=new Image();im.onload=()=>{ghostImg=im;T.ghost=true;const g=$('#tGhost');g.hidden=false;g.setAttribute('aria-pressed','true');};im.src=src;}
+$('#tRef').onclick=()=>$('#refFile').click();
+$('#refFile').onchange=e=>{const f=e.target.files[0];if(f)setGhost(URL.createObjectURL(f));e.target.value='';};
+
 /* ---- analysis ---- */
 const N=72,an=document.createElement('canvas');an.width=an.height=N;const actx=an.getContext('2d',{willReadFrequently:true});
 let prevLuma=null,lapHist=[],A={ok:false},sig='',ready=false;
@@ -298,13 +361,15 @@ function analyze(){
   for(let i=0;i<B*B;i++){const w=Math.pow(sal[i]/(maxS||1),3);tw+=w;cx+=w*((i%B)+.5)/B;cy+=w*(Math.floor(i/B)+.5)/B;}
   const subj=maxS>25?{x:cx/tw,y:cy/tw}:null;
   A={ok:true,mean,blown:blown/(N*N),dark:dark/(N*N),lap,ref:Math.max(...lapHist),diff,subj};
+  if(T.zebra||T.peak)buildMask(v,s);
   evaluate();
 }
+let prevReady=false,readySince=0,autoCool=0;
 function evaluate(){
   const M=[];const add=(l,t)=>M.push({l,t});
   // level
   if(up){
-    if(Math.abs(up.z)>.85){ // flat / top-down
+    if(up.z>.85){ // flat / top-down (camera facing the table)
       const tilt=Math.asin(Math.min(1,Math.hypot(up.x,up.y)))*180/Math.PI;
       if(tilt<2)add('ok','真上で水平です');
       else{const h=Math.abs(up.x)>Math.abs(up.y)?(up.x>0?'右':'左'):(up.y>0?'上':'下');add(tilt<5?'warn':'bad',`${h}側が高い(${tilt.toFixed(0)}°)。平らにしてください`);}
@@ -314,7 +379,7 @@ function evaluate(){
       else add(Math.abs(roll)<4?'warn':'bad',`${roll>0?'右':'左'}に${Math.abs(roll).toFixed(0)}°傾いています`);
     }else{
       const down=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI;
-      if(!dish)add('ok',`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`);
+      if(!dish)add('ok',down>=0?`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`:`カメラは上向き ${(-down).toFixed(0)}°`);
     }
   }
   if(up&&dish){
@@ -346,9 +411,23 @@ function evaluate(){
     }else add('warn','主役がはっきりしません。背景を整理して');
   }
   ready=M.length>0&&M.every(m=>m.l==='ok');
-  const ns=M.map(m=>m.l+m.t).join('|');
+  // haptic tick when everything turns green (Android; iOS Safari has no vibration API)
+  if(ready&&!prevReady){try{navigator.vibrate?.(35);}catch(e){}}
+  prevReady=ready;
+  // auto shutter: all green and steady for 1 s
+  const now=performance.now(),busy=!!rec||$('#modal').classList.contains('on');
+  let autoMsg='';
+  if(T.auto&&ready&&!busy&&now>autoCool){if(!readySince)readySince=now;const left=1000-(now-readySince);
+    if(left<=0){readySince=0;autoCool=now+2500;takePhoto();}else autoMsg='そのまま… 自動で撮ります';}
+  else readySince=0;
+  // one instruction at a time (most important first): bad before warn, in the order the checks were added
+  const first=M.find(m=>m.l==='bad')||M.find(m=>m.l==='warn');
+  const nowText=autoMsg||(first?first.t:(M.length?'撮影OK! シャッターを押して':'カメラを向けてください'));
+  const nowCls=autoMsg?'auto':first?'':'ok';
+  const ns=M.map(m=>m.l+m.t).join('|')+'#'+nowText;
   if(ns===sig)return;sig=ns;
-  $('#msgs').innerHTML=M.map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
+  const nowEl=$('#now');nowEl.textContent=nowText;nowEl.className='now '+nowCls;
+  $('#msgs').innerHTML=M.filter(m=>m!==first).map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
   $('#shot').classList.toggle('ready',ready);
 }
 
@@ -360,6 +439,9 @@ function loop(){
   const c=cropRect();
   if(fmt.r){ox.fillStyle='rgba(0,0,0,.55)';ox.fillRect(0,0,innerWidth,c.y);ox.fillRect(0,c.y+c.h,innerWidth,innerHeight-c.y-c.h);
     ox.fillRect(0,c.y,c.x,c.h);ox.fillRect(c.x+c.w,c.y,innerWidth-c.x-c.w,c.h);}
+  if(T.ghost&&ghostImg){const r=ghostImg.width/ghostImg.height,cr=c.w/c.h;let sw=ghostImg.width,sh=ghostImg.height;
+    if(r>cr)sw=sh*cr;else sh=sw/cr;ox.globalAlpha=.38;ox.drawImage(ghostImg,(ghostImg.width-sw)/2,(ghostImg.height-sh)/2,sw,sh,c.x,c.y,c.w,c.h);ox.globalAlpha=1;}
+  if((T.zebra||T.peak)&&mkReady){ox.imageSmoothingEnabled=false;ox.drawImage(mk,c.x,c.y,c.w,c.h);ox.imageSmoothingEnabled=true;}
   const Z={reel:{t:.14,b:.35,s:.06,l:'公式: 上14% 下35% 左右6%'},story:{t:.14,b:.20,s:0,l:'公式: 上14% 下20%'}}[fmt.id];
   if(Z){const by=1-Z.b-Z.t;ox.fillStyle='rgba(255,90,60,.22)';ox.fillRect(c.x,c.y,c.w,c.h*Z.t);ox.fillRect(c.x,c.y+c.h*(1-Z.b),c.w,c.h*Z.b);
     if(Z.s){ox.fillRect(c.x,c.y+c.h*Z.t,c.w*Z.s,c.h*by);ox.fillRect(c.x+c.w*(1-Z.s),c.y+c.h*Z.t,c.w*Z.s,c.h*by);}
@@ -376,7 +458,7 @@ function loop(){
     if(A.target){ox.setLineDash([5,5]);ox.lineWidth=2;ox.beginPath();ox.moveTo(c.x+c.w*A.subj.x,c.y+c.h*A.subj.y);ox.lineTo(c.x+c.w*A.target[0],c.y+c.h*A.target[1]);ox.stroke();ox.setLineDash([]);}}
   // level
   if(up){const cx=innerWidth/2,cy=innerHeight/2;
-    if(Math.abs(up.z)>.85){const tilt=Math.hypot(up.x,up.y),good=tilt<.035;
+    if(up.z>.85){const tilt=Math.hypot(up.x,up.y),good=tilt<.035;
       ox.strokeStyle=good?'#3ddc97':'#fff';ox.lineWidth=3;ox.beginPath();ox.arc(cx,cy,46,0,7);ox.stroke();
       ox.beginPath();ox.moveTo(cx-10,cy);ox.lineTo(cx+10,cy);ox.moveTo(cx,cy-10);ox.lineTo(cx,cy+10);ox.stroke();
       ox.fillStyle=good?'#3ddc97':'#ffd23f';ox.beginPath();ox.arc(cx+up.x*46/.3,cy-up.y*46/.3,10,0,7);ox.fill();
@@ -393,16 +475,21 @@ setInterval(analyze,250);
 let lastBlob=null,lastName='';
 function showResult(blob,name,isVideo){
   lastBlob=blob;lastName=name;const u=URL.createObjectURL(blob);
+  $('#mGhost').hidden=!!isVideo;
   $('#prev').innerHTML=isVideo?`<video src="${u}" controls playsinline autoplay loop muted></video>`:`<img src="${u}" alt="撮影した写真">`;
   $('#modal').classList.add('on');
 }
-$('#shot').onclick=()=>{
+let lastUrl='';
+function takePhoto(){
   const v=$('#v'),s=srcRect(cropRect());if(!s)return;
+  const fl=document.createElement('div');fl.style.cssText='position:fixed;inset:0;background:#fff;opacity:.7;z-index:4;pointer-events:none;transition:opacity .25s';document.body.appendChild(fl);requestAnimationFrame(()=>{fl.style.opacity='0';setTimeout(()=>fl.remove(),300);});
   const cv=document.createElement('canvas');const sc=Math.min(1,2160/Math.max(s.w,s.h));
   cv.width=Math.round(s.w*sc);cv.height=Math.round(s.h*sc);
   cv.getContext('2d').drawImage(v,s.x,s.y,s.w,s.h,0,0,cv.width,cv.height);
   cv.toBlob(b=>showResult(b,`shot-${Date.now()}.jpg`,false),'image/jpeg',.92);
-};
+}
+$('#shot').onclick=takePhoto;
+$('#mGhost').onclick=()=>{if(!lastBlob||!lastBlob.type.startsWith('image'))return;setGhost(URL.createObjectURL(lastBlob));$('#mClose').click();};
 $('#mClose').onclick=()=>{$('#modal').classList.remove('on');$('#prev').innerHTML='';};
 $('#mSave').onclick=async()=>{
   if(!lastBlob)return;const f=new File([lastBlob],lastName,{type:lastBlob.type});
