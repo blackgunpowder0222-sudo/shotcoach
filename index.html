@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1233">
+<title>映えコーチ カメラ</title>
+<style>
+:root{--ink:#1b1233;--pink:#ff3d81;--yellow:#ffd23f;--ok:#3ddc97;--warn:#ffb020;--bad:#ff5a5f;--glass:rgba(27,18,51,.62)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:#000;color:#fff;font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0;background:#000}
+#v{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hud{position:absolute;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));display:grid;gap:6px;pointer-events:none}
+.msg{display:flex;align-items:center;gap:8px;background:var(--glass);padding:7px 12px;border-radius:12px;font-size:14px;font-weight:700;backdrop-filter:blur(6px);width:fit-content;max-width:100%}
+.msg i{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:var(--ok)}
+.msg.warn i{background:var(--warn)}.msg.bad i{background:var(--bad)}
+.hint{font-size:12px;font-weight:500;opacity:.9;background:var(--glass);padding:6px 12px;border-radius:10px;width:fit-content;max-width:100%}
+.ctrl{position:absolute;left:0;right:0;bottom:0;padding:12px max(12px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;gap:12px;background:linear-gradient(transparent,rgba(0,0,0,.55) 40%)}
+.pills{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.pills::-webkit-scrollbar{display:none}
+.pill{flex:0 0 auto;border:1px solid #ffffff55;background:var(--glass);color:#fff;font:inherit;font-size:13px;font-weight:700;padding:8px 14px;border-radius:99px;cursor:pointer}
+.pill[aria-pressed="true"]{background:var(--pink);border-color:var(--pink)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.shutter{width:76px;height:76px;border-radius:50%;border:5px solid #fff;background:transparent;position:relative;cursor:pointer;transition:border-color .2s}
+.shutter::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff}
+.shutter.ready{border-color:var(--ok);box-shadow:0 0 0 4px #3ddc9755}
+.side{width:64px;height:64px;border-radius:50%;border:0;background:var(--glass);color:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.side.rec{background:var(--bad)}
+.cue{position:absolute;left:0;right:0;top:40%;text-align:center;padding:0 24px;font-size:26px;font-weight:900;text-shadow:0 2px 12px #000;pointer-events:none;text-wrap:balance}
+.clock{position:absolute;right:max(12px,env(safe-area-inset-right));top:calc(56px + env(safe-area-inset-top));font:500 28px ui-monospace,monospace;color:var(--yellow);text-shadow:0 2px 8px #000}
+.start{position:fixed;inset:0;z-index:5;background:var(--ink);display:flex;flex-direction:column;justify-content:center;gap:16px;padding:24px max(24px,env(safe-area-inset-left))}
+.start h1{margin:0;font-size:32px;color:var(--pink);font-weight:900}
+.start p{margin:0;line-height:1.7;color:#d9d0f0}
+.start ul{margin:0;padding-left:20px;line-height:1.8;color:#d9d0f0}
+.go{border:0;background:var(--pink);color:#fff;font:inherit;font-weight:900;font-size:18px;padding:16px;border-radius:16px;cursor:pointer}
+.err{color:var(--yellow);font-weight:700}
+.modal{position:fixed;inset:0;z-index:6;background:#000d;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px}
+.modal.on{display:flex}
+.modal img,.modal video{max-width:100%;max-height:68vh;border-radius:12px}
+.modal .row{width:100%;max-width:420px}
+.modal button{flex:1;border:0;border-radius:14px;padding:14px;font:inherit;font-weight:900;font-size:16px;cursor:pointer}
+.b1{background:var(--pink);color:#fff}.b2{background:#ffffff26;color:#fff}
+button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="v" playsinline muted autoplay></video>
+  <canvas id="ov"></canvas>
+  <div class="hud"><div id="msgs" style="display:grid;gap:6px"></div><div class="hint" id="hint"></div></div>
+  <div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
+  <div class="ctrl">
+    <div class="pills" id="genres" role="group" aria-label="被写体"></div>
+    <div class="pills" id="fmts" role="group" aria-label="サイズ"></div>
+    <div class="row">
+      <button class="side" id="flip" type="button">反転</button>
+      <button class="shutter" id="shot" type="button" aria-label="撮影"></button>
+      <button class="side" id="rec" type="button">15秒<br>動画</button>
+    </div>
+  </div>
+</div>
+
+<div class="start" id="start">
+  <h1>映えコーチ カメラ</h1>
+  <p>カメラの映像を見ながら、撮影中にその場でアドバイスを出します。映像は端末の中だけで処理し、外へは送りません。</p>
+  <ul>
+    <li>水平・傾き(スマホのセンサー)</li>
+    <li>暗さ・白飛び</li>
+    <li>ブレ・ピンボケ</li>
+    <li>主役の位置(三分割の交点にいるか)</li>
+  </ul>
+  <button class="go" id="go" type="button">カメラを開始</button>
+  <p class="err" id="err" role="alert"></p>
+</div>
+
+<div class="modal" id="modal">
+  <div id="prev"></div>
+  <div class="row"><button class="b2" id="mClose" type="button">閉じる</button><button class="b1" id="mSave" type="button">保存・共有</button></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+/* ---- genres: hint, ideal subject positions (normalized), 15s cut list ---- */
+const T3=[[1/3,1/3],[2/3,1/3],[1/3,2/3],[2/3,2/3]], C=[[.5,.5]];
+const GEN=[
+ {id:'food',n:'料理',hint:'真上か斜め45°。窓の光を横から当てて、皿は交点へ。',t:[...C,...T3],shots:['全体を斜め45°で、湯気を見せる','真上から手が入る(取り分け・かける)','断面・チーズ・黄身のアップ','ひと口食べる、または引きで完成']},
+ {id:'sweets',n:'スイーツ・飲み物',hint:'斜め30〜45°。注ぐ・すくう動きを入れる。氷は溶ける前に。',t:[[.5,.5],[.5,.4]],shots:['全体を斜めから','注ぐ・かける瞬間','断面・層のアップ','ひと口すくう']},
+ {id:'shop',n:'店構え',hint:'正面から水平に。看板と入口を中央線に。電線・ゴミ箱は外す。',t:[[.5,.5],[.5,.42]],shots:['通りの端から歩いて近づく','扉を開けて入る後ろ姿','席から一品が運ばれてくる','看板を振り返って締める']},
+ {id:'cafe',n:'店内',hint:'席の目線の高さ。窓を斜め前に。手前・奥の3層で撮る。',t:[...T3,...C],shots:['入口からゆっくり歩く','カウンターの手元作業','窓際でカップを置く','窓の外へパンして終わる']},
+ {id:'item',n:'商品',hint:'真正面かやや上から30°。背景は無地、余白を広く。',t:[...C],shots:['箱を開ける','手に取って使う','使用後・完成','全体と購入先']},
+ {id:'person',n:'人物',hint:'胸の高さ。全身は足元を切らない。縦の三分割線に立たせる。',t:[[1/3,.5],[2/3,.5]],shots:['全身で歩いてくる','小物のアップ','振り返る','ポーズで止める']},
+ {id:'view',n:'風景・旅',hint:'低めに構えて前景を入れる。水平線は三分割線に。',t:[...T3],shots:['足元を歩く','全景を4秒固定','小さな発見','夕焼けや夜景で締める']},
+ {id:'pet',n:'ペット',hint:'動物の目線まで下がる。フラッシュは使わない。',t:[...T3,...C],shots:['目線で全身が動く','顔のアップ','おやつに反応','寝顔・あくび']}
+];
+const FMT=[{id:'full',n:'全画面',r:0},{id:'feed',n:'フィード 4:5',r:4/5},{id:'grid',n:'グリッド 3:4',r:3/4},{id:'reel',n:'リール 9:16',r:9/16}];
+let gen=GEN[0], fmt=FMT[1], facing='environment', stream=null;
+
+/* ---- UI chips ---- */
+function chips(el,list,get,set){el.innerHTML='';list.forEach(x=>{const b=document.createElement('button');b.type='button';b.className='pill';b.textContent=x.n;
+  b.setAttribute('aria-pressed',get()===x);b.onclick=()=>{set(x);[...el.children].forEach((c,i)=>c.setAttribute('aria-pressed',list[i]===x));if(el===$('#genres'))showHint();};el.appendChild(b);});}
+chips($('#genres'),GEN,()=>gen,x=>gen=x);chips($('#fmts'),FMT,()=>fmt,x=>fmt=x);
+const showHint=()=>$('#hint').textContent=gen.hint; showHint();
+
+/* ---- camera ---- */
+async function startCam(){
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
+  const v=$('#v');v.srcObject=stream;await v.play();
+}
+$('#go').onclick=async()=>{
+  const err=$('#err');err.textContent='';
+  if(!navigator.mediaDevices?.getUserMedia){err.textContent='このブラウザではカメラを使えません。HTTPSのページでSafariかChromeから開いてください。';return;}
+  try{
+    // motion permission (iOS) must be requested in the tap handler
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      try{await DeviceOrientationEvent.requestPermission();}catch(e){}
+    }
+    await startCam();
+    $('#start').style.display='none';
+    listenTilt();loop();
+  }catch(e){err.textContent=(e.name==='NotAllowedError'||e.name==='NotSupportedError'||e.name==='SecurityError')?'カメラを使えません。ブラウザの設定でこのページのカメラを許可し、HTTPSのページで開いているか確認してください。':e.name==='NotFoundError'?'カメラが見つかりません。':'カメラを開けませんでした('+e.name+')。';}
+};
+$('#flip').onclick=async()=>{facing=facing==='environment'?'user':'environment';try{await startCam();}catch(e){}};
+
+/* ---- tilt via deviceorientation ---- */
+let up=null; // world "up" in device coordinates
+function listenTilt(){
+  addEventListener('deviceorientation',e=>{
+    if(e.beta==null||e.gamma==null)return;
+    const b=e.beta*Math.PI/180,g=e.gamma*Math.PI/180;
+    up={x:-Math.cos(b)*Math.sin(g),y:Math.sin(b),z:Math.cos(b)*Math.cos(g)};
+  },true);
+}
+
+/* ---- geometry: crop rect on stage and source ---- */
+function cropRect(){
+  const sw=innerWidth,sh=innerHeight;let w=sw,h=sh;
+  if(fmt.r){if(fmt.r<sw/sh){h=sh;w=sh*fmt.r}else{w=sw;h=sw/fmt.r}}
+  return {x:(sw-w)/2,y:(sh-h)/2,w,h};
+}
+function srcRect(c){
+  const v=$('#v'),vw=v.videoWidth,vh=v.videoHeight;if(!vw)return null;
+  const s=Math.max(innerWidth/vw,innerHeight/vh),ox=(innerWidth-vw*s)/2,oy=(innerHeight-vh*s)/2;
+  return {x:(c.x-ox)/s,y:(c.y-oy)/s,w:c.w/s,h:c.h/s};
+}
+
+/* ---- analysis ---- */
+const N=72,an=document.createElement('canvas');an.width=an.height=N;const actx=an.getContext('2d',{willReadFrequently:true});
+let prevLuma=null,lapHist=[],A={ok:false},sig='',ready=false;
+function analyze(){
+  const v=$('#v');if(v.readyState<2)return;
+  const s=srcRect(cropRect());if(!s)return;
+  actx.drawImage(v,s.x,s.y,s.w,s.h,0,0,N,N);
+  const d=actx.getImageData(0,0,N,N).data,L=new Float32Array(N*N);
+  let sum=0,blown=0,dark=0,mr=0,mg=0,mb=0;
+  for(let i=0;i<N*N;i++){const r=d[i*4],g=d[i*4+1],b=d[i*4+2],l=.299*r+.587*g+.114*b;L[i]=l;sum+=l;if(l>245)blown++;if(l<18)dark++;mr+=r;mg+=g;mb+=b;}
+  const mean=sum/(N*N);mr/=N*N;mg/=N*N;mb/=N*N;
+  // sharpness: variance of Laplacian
+  let ls=0,ls2=0,n=0;
+  for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++){const i=y*N+x,lp=4*L[i]-L[i-1]-L[i+1]-L[i-N]-L[i+N];ls+=lp;ls2+=lp*lp;n++;}
+  const lap=ls2/n-(ls/n)**2;
+  lapHist.push(lap);if(lapHist.length>14)lapHist.shift();
+  // shake: mean abs diff vs previous frame
+  let diff=0;if(prevLuma){for(let i=0;i<N*N;i+=3)diff+=Math.abs(L[i]-prevLuma[i]);diff/=(N*N/3);}
+  prevLuma=L;
+  // saliency centroid: distance of 3x3 block colour from global mean
+  const B=24,k=N/B;let tw=0,cx=0,cy=0,maxS=0;const sal=new Float32Array(B*B);
+  for(let by=0;by<B;by++)for(let bx=0;bx<B;bx++){let r=0,g=0,b=0;
+    for(let y=0;y<k;y++)for(let x=0;x<k;x++){const i=((by*k+y)*N+bx*k+x)*4;r+=d[i];g+=d[i+1];b+=d[i+2];}
+    r/=k*k;g/=k*k;b/=k*k;const sv=Math.hypot(r-mr,g-mg,b-mb);sal[by*B+bx]=sv;if(sv>maxS)maxS=sv;}
+  for(let i=0;i<B*B;i++){const w=Math.pow(sal[i]/(maxS||1),3);tw+=w;cx+=w*((i%B)+.5)/B;cy+=w*(Math.floor(i/B)+.5)/B;}
+  const subj=maxS>25?{x:cx/tw,y:cy/tw}:null;
+  A={ok:true,mean,blown:blown/(N*N),dark:dark/(N*N),lap,ref:Math.max(...lapHist),diff,subj};
+  evaluate();
+}
+function evaluate(){
+  const M=[];const add=(l,t)=>M.push({l,t});
+  // level
+  if(up){
+    if(Math.abs(up.z)>.85){ // flat / top-down
+      const tilt=Math.asin(Math.min(1,Math.hypot(up.x,up.y)))*180/Math.PI;
+      if(tilt<2)add('ok','真上で水平です');
+      else{const h=Math.abs(up.x)>Math.abs(up.y)?(up.x>0?'右':'左'):(up.y>0?'上':'下');add(tilt<5?'warn':'bad',`${h}側が高い(${tilt.toFixed(0)}°)。平らにしてください`);}
+    }else if(Math.abs(up.z)<.5){
+      const roll=Math.atan2(-up.x,up.y)*180/Math.PI;
+      if(Math.abs(roll)<1.5)add('ok','水平です');
+      else add(Math.abs(roll)<4?'warn':'bad',`${roll>0?'右':'左'}に${Math.abs(roll).toFixed(0)}°傾いています`);
+    }else{
+      const down=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI;
+      add('ok',`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`);
+    }
+  }
+  if(A.ok){
+    // light
+    if(A.mean<55)add('bad','暗いです。窓の近くか明るい向きへ');
+    else if(A.mean<80)add('warn','少し暗め。光の方へ寄せましょう');
+    else if(A.mean>195)add('bad','明るすぎます。直射日光や照明を避けて');
+    else if(A.blown>.08)add('warn','白飛びしています。明るい部分を画面から外して');
+    else add('ok','明るさOK');
+    // sharp / shake
+    if(A.diff>14)add('bad','動いています。脇を締めて止めてください');
+    else if(A.ref>25&&A.lap<A.ref*.45)add('warn','ピントが甘いかも。画面をタップ、または少し離れて');
+    else add('ok','ブレなし');
+    // subject
+    if(A.subj){
+      let best=null,bd=9;for(const t of gen.t){const dd=Math.hypot(A.subj.x-t[0],A.subj.y-t[1]);if(dd<bd){bd=dd;best=t;}}
+      A.target=best;
+      if(bd<.13)add('ok','主役が良い位置にいます');
+      else{const dx=best[0]-A.subj.x,dy=best[1]-A.subj.y;
+        const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'左':'右'):(dy>0?'上':'下');
+        add('warn',`主役を${dir==='左'||dir==='右'?(dx>0?'右':'左'):(dy>0?'下':'上')}へ。カメラを${dir}に振る`);}
+    }else add('warn','主役がはっきりしません。背景を整理して');
+  }
+  ready=M.length>0&&M.every(m=>m.l==='ok');
+  const ns=M.map(m=>m.l+m.t).join('|');
+  if(ns===sig)return;sig=ns;
+  $('#msgs').innerHTML=M.map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
+  $('#shot').classList.toggle('ready',ready);
+}
+
+/* ---- overlay drawing ---- */
+const ov=$('#ov'),ox=ov.getContext('2d');
+function loop(){
+  const dpr=devicePixelRatio||1;if(ov.width!==innerWidth*dpr){ov.width=innerWidth*dpr;ov.height=innerHeight*dpr;}
+  ox.setTransform(dpr,0,0,dpr,0,0);ox.clearRect(0,0,innerWidth,innerHeight);
+  const c=cropRect();
+  if(fmt.r){ox.fillStyle='rgba(0,0,0,.55)';ox.fillRect(0,0,innerWidth,c.y);ox.fillRect(0,c.y+c.h,innerWidth,innerHeight-c.y-c.h);
+    ox.fillRect(0,c.y,c.x,c.h);ox.fillRect(c.x+c.w,c.y,innerWidth-c.x-c.w,c.h);}
+  if(fmt.id==='reel'){ox.fillStyle='rgba(255,90,60,.2)';ox.fillRect(c.x,c.y,c.w,c.h*.14);ox.fillRect(c.x,c.y+c.h*.8,c.w,c.h*.2);}
+  ox.strokeStyle='rgba(255,255,255,.55)';ox.lineWidth=1;ox.beginPath();
+  for(const k of [1/3,2/3]){ox.moveTo(c.x+c.w*k,c.y);ox.lineTo(c.x+c.w*k,c.y+c.h);ox.moveTo(c.x,c.y+c.h*k);ox.lineTo(c.x+c.w,c.y+c.h*k);}
+  ox.stroke();
+  // ideal points
+  ox.fillStyle='rgba(255,210,63,.9)';
+  for(const t of gen.t){ox.beginPath();ox.arc(c.x+c.w*t[0],c.y+c.h*t[1],4,0,7);ox.fill();}
+  // subject marker
+  if(A.ok&&A.subj){ox.strokeStyle='#ff3d81';ox.lineWidth=3;ox.beginPath();ox.arc(c.x+c.w*A.subj.x,c.y+c.h*A.subj.y,16,0,7);ox.stroke();
+    if(A.target){ox.setLineDash([5,5]);ox.lineWidth=2;ox.beginPath();ox.moveTo(c.x+c.w*A.subj.x,c.y+c.h*A.subj.y);ox.lineTo(c.x+c.w*A.target[0],c.y+c.h*A.target[1]);ox.stroke();ox.setLineDash([]);}}
+  // level
+  if(up){const cx=innerWidth/2,cy=innerHeight/2;
+    if(Math.abs(up.z)>.85){const tilt=Math.hypot(up.x,up.y),good=tilt<.035;
+      ox.strokeStyle=good?'#3ddc97':'#fff';ox.lineWidth=3;ox.beginPath();ox.arc(cx,cy,46,0,7);ox.stroke();
+      ox.beginPath();ox.moveTo(cx-10,cy);ox.lineTo(cx+10,cy);ox.moveTo(cx,cy-10);ox.lineTo(cx,cy+10);ox.stroke();
+      ox.fillStyle=good?'#3ddc97':'#ffd23f';ox.beginPath();ox.arc(cx+up.x*46/.3,cy-up.y*46/.3,10,0,7);ox.fill();
+    }else if(Math.abs(up.z)<.5){const roll=Math.atan2(-up.x,up.y),good=Math.abs(roll*180/Math.PI)<1.5;
+      ox.save();ox.translate(cx,cy);ox.rotate(-roll);ox.strokeStyle=good?'#3ddc97':'#ffd23f';ox.lineWidth=3;
+      ox.beginPath();ox.moveTo(-90,0);ox.lineTo(-30,0);ox.moveTo(30,0);ox.lineTo(90,0);ox.stroke();ox.restore();
+      ox.strokeStyle='rgba(255,255,255,.8)';ox.lineWidth=2;ox.beginPath();ox.moveTo(cx-110,cy);ox.lineTo(cx-95,cy);ox.moveTo(cx+95,cy);ox.lineTo(cx+110,cy);ox.stroke();}
+  }
+  requestAnimationFrame(loop);
+}
+setInterval(analyze,250);
+
+/* ---- capture ---- */
+let lastBlob=null,lastName='';
+function showResult(blob,name,isVideo){
+  lastBlob=blob;lastName=name;const u=URL.createObjectURL(blob);
+  $('#prev').innerHTML=isVideo?`<video src="${u}" controls playsinline autoplay loop muted></video>`:`<img src="${u}" alt="撮影した写真">`;
+  $('#modal').classList.add('on');
+}
+$('#shot').onclick=()=>{
+  const v=$('#v'),s=srcRect(cropRect());if(!s)return;
+  const cv=document.createElement('canvas');const sc=Math.min(1,2160/Math.max(s.w,s.h));
+  cv.width=Math.round(s.w*sc);cv.height=Math.round(s.h*sc);
+  cv.getContext('2d').drawImage(v,s.x,s.y,s.w,s.h,0,0,cv.width,cv.height);
+  cv.toBlob(b=>showResult(b,`shot-${Date.now()}.jpg`,false),'image/jpeg',.92);
+};
+$('#mClose').onclick=()=>{$('#modal').classList.remove('on');$('#prev').innerHTML='';};
+$('#mSave').onclick=async()=>{
+  if(!lastBlob)return;const f=new File([lastBlob],lastName,{type:lastBlob.type});
+  try{if(navigator.canShare?.({files:[f]})){await navigator.share({files:[f]});return;}}catch(e){if(e.name==='AbortError')return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(lastBlob);a.download=lastName;document.body.appendChild(a);a.click();a.remove();
+};
+
+/* ---- 15s recording with cut cues ---- */
+let rec=null,recT=null,chunks=[];
+$('#rec').onclick=()=>{
+  if(rec){rec.stop();return;}
+  if(!stream||typeof MediaRecorder==='undefined'){$('#cue').textContent='このブラウザは動画撮影に未対応です';setTimeout(()=>$('#cue').textContent='',2500);return;}
+  const mt=['video/mp4','video/webm;codecs=vp9','video/webm'].find(t=>MediaRecorder.isTypeSupported?.(t))||'';
+  chunks=[];rec=new MediaRecorder(stream,mt?{mimeType:mt}:undefined);
+  rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  rec.onstop=()=>{clearInterval(recT);$('#cue').textContent='';$('#clock').hidden=true;$('#rec').classList.remove('rec');$('#rec').innerHTML='15秒<br>動画';
+    const type=rec.mimeType||'video/webm';rec=null;showResult(new Blob(chunks,{type}),`reel-${Date.now()}.${type.includes('mp4')?'mp4':'webm'}`,true);};
+  rec.start();$('#rec').classList.add('rec');$('#rec').textContent='停止';$('#clock').hidden=false;
+  const T=15,t0=performance.now(),N2=gen.shots.length;
+  recT=setInterval(()=>{const e=(performance.now()-t0)/1000;if(e>=T){rec.stop();return;}
+    const i=Math.min(N2-1,Math.floor(e/(T/N2)));$('#cue').textContent=`${i+1}カット目: ${gen.shots[i]}`;$('#clock').textContent=(T-e).toFixed(1);},100);
+};
+</script>
+</body>
+</html>
