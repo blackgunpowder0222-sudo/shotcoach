@@ -34,6 +34,7 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tool[aria-pressed="true"]{background:var(--pink);border-color:var(--pink)}
 .zoomrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}.zoomrow[hidden]{display:none}
 .zoomrow input{flex:1;accent-color:var(--pink)}
+.sensor{pointer-events:auto;border:0;background:#ffd23f;color:#1b1233;font:inherit;font-size:14px;font-weight:900;padding:10px 14px;border-radius:12px;width:fit-content;max-width:100%;text-align:left;cursor:pointer;box-shadow:0 4px 14px #0006}
 .hint{font-size:12px;font-weight:500;opacity:.9;background:var(--glass);padding:6px 12px;border-radius:10px;width:fit-content;max-width:100%}
 .ctrl{position:absolute;left:0;right:0;bottom:0;padding:12px max(12px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;gap:12px;background:linear-gradient(transparent,rgba(0,0,0,.55) 40%)}
 .dishrow{display:flex;gap:8px}
@@ -72,7 +73,7 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 <div id="stage">
   <video id="v" playsinline muted autoplay></video>
   <canvas id="ov"></canvas>
-  <div class="hud"><div class="now" id="now">カメラを準備中…</div><div id="msgs"></div><div class="hint" id="hint"></div></div>
+  <div class="hud"><div class="now" id="now">カメラを準備中…</div><div id="msgs"></div><div class="hint" id="hint"></div><button type="button" id="sensorBtn" class="sensor" hidden></button></div>
   <div class="tools" id="tools">
     <button class="tool" type="button" id="tZebra" aria-pressed="false">白飛び<br>表示</button>
     <button class="tool" type="button" id="tPeak" aria-pressed="false">ピント<br>表示</button>
@@ -282,24 +283,47 @@ $('#go').onclick=async()=>{
   const err=$('#err');err.textContent='';
   if(!navigator.mediaDevices?.getUserMedia){err.textContent='このブラウザではカメラを使えません。HTTPSのページでSafariかChromeから開いてください。';return;}
   try{
-    // motion permission (iOS) must be requested in the tap handler
-    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
-      try{await DeviceOrientationEvent.requestPermission();}catch(e){}
-    }
+    // motion permission (iOS) must be requested in the tap handler, before any other await
+    listenTilt();
+    await askMotion();
     await startCam();
     $('#start').style.display='none';
-    listenTilt();loop();
+    loop();
+    setTimeout(checkTilt,2500);
   }catch(e){err.textContent=(e.name==='NotAllowedError'||e.name==='NotSupportedError'||e.name==='SecurityError')?'カメラを使えません。ブラウザの設定でこのページのカメラを許可し、HTTPSのページで開いているか確認してください。':e.name==='NotFoundError'?'カメラが見つかりません。':'カメラを開けませんでした('+e.name+')。';}
 };
 $('#flip').onclick=async()=>{facing=facing==='environment'?'user':'environment';try{await startCam();}catch(e){}};
 
 /* ---- tilt via deviceorientation ---- */
-let up=null; // world "up" in device coordinates
+let up=null,motionState='unknown'; // world "up" in device coordinates
+const needsPerm=()=>typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function';
+async function askMotion(){
+  if(!needsPerm()){motionState='granted';return;}
+  try{motionState=await DeviceOrientationEvent.requestPermission();}catch(e){motionState='error';}
+}
+// the level line needs the tilt sensor. On iPhone a home-screen app asks separately from Safari,
+// so if no tilt data arrives, offer a button that asks again (must be a tap).
+function checkTilt(){
+  if(up)return;
+  const b=$('#sensorBtn');b.hidden=false;
+  b.textContent=motionState==='denied'?'傾きセンサーが許可されていません。タップしてもう一度許可':'水平線を表示する(タップして傾きセンサーを許可)';
+}
+$('#sensorBtn').onclick=async()=>{
+  const b=$('#sensorBtn');await askMotion();
+  setTimeout(()=>{
+    if(up){b.hidden=true;return;}
+    b.textContent=motionState==='denied'
+      ?'許可されませんでした。ホーム画面のアイコンを削除して追加し直すと、もう一度確認が出ます'
+      :'傾きの情報が届きません。このスマホでは使えない可能性があります';
+  },1200);
+};
 function listenTilt(){
+  if(listenTilt.on)return;listenTilt.on=true;
   addEventListener('deviceorientation',e=>{
     if(e.beta==null||e.gamma==null)return;
     const b=e.beta*Math.PI/180,g=e.gamma*Math.PI/180;
     up={x:-Math.cos(b)*Math.sin(g),y:Math.sin(b),z:Math.cos(b)*Math.cos(g)};
+    const sb=document.getElementById('sensorBtn');if(sb&&!sb.hidden)sb.hidden=true;
   },true);
 }
 
