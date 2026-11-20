@@ -262,7 +262,7 @@ $('#dishForm').onsubmit=e=>{
 /* ---- camera ---- */
 async function startCam(){
   if(stream)stream.getTracks().forEach(t=>t.stop());
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:3840},height:{ideal:2160}},audio:false});
   const v=$('#v');v.srcObject=stream;await v.play();
   setupControls();
 }
@@ -524,10 +524,10 @@ let lastUrl='';
 function takePhoto(){
   const v=$('#v'),s=srcRect(cropRect());if(!s)return;
   const fl=document.createElement('div');fl.style.cssText='position:fixed;inset:0;background:#fff;opacity:.7;z-index:4;pointer-events:none;transition:opacity .25s';document.body.appendChild(fl);requestAnimationFrame(()=>{fl.style.opacity='0';setTimeout(()=>fl.remove(),300);});
-  const cv=document.createElement('canvas');const sc=Math.min(1,2160/Math.max(s.w,s.h));
+  const cv=document.createElement('canvas');const sc=Math.min(1,4096/Math.max(s.w,s.h));
   cv.width=Math.round(s.w*sc);cv.height=Math.round(s.h*sc);
   cv.getContext('2d').drawImage(v,s.x,s.y,s.w,s.h,0,0,cv.width,cv.height);
-  cv.toBlob(b=>showResult(b,`shot-${Date.now()}.jpg`,false),'image/jpeg',.92);
+  cv.toBlob(b=>showResult(b,`shot-${Date.now()}.jpg`,false),'image/jpeg',1.0);
 }
 $('#shot').onclick=takePhoto;
 $('#mGhost').onclick=()=>{if(!lastBlob||!lastBlob.type.startsWith('image'))return;setGhost(URL.createObjectURL(lastBlob));$('#mClose').click();};
