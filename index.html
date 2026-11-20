@@ -35,6 +35,7 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .zoomrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}.zoomrow[hidden]{display:none}
 .zoomrow input{flex:1;accent-color:var(--pink)}
 .sensor{pointer-events:auto;border:0;background:#ffd23f;color:#1b1233;font:inherit;font-size:14px;font-weight:900;padding:10px 14px;border-radius:12px;width:fit-content;max-width:100%;text-align:left;cursor:pointer;box-shadow:0 4px 14px #0006}
+.sread{position:absolute;left:max(10px,env(safe-area-inset-left));top:52%;font-size:10px;font-weight:700;color:#fff;background:rgba(0,0,0,.45);padding:3px 8px;border-radius:8px;pointer-events:none}
 .hint{font-size:12px;font-weight:500;opacity:.9;background:var(--glass);padding:6px 12px;border-radius:10px;width:fit-content;max-width:100%}
 .ctrl{position:absolute;left:0;right:0;bottom:0;padding:12px max(12px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;gap:12px;background:linear-gradient(transparent,rgba(0,0,0,.55) 40%)}
 .dishrow{display:flex;gap:8px}
@@ -83,7 +84,7 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
     <button class="tool" type="button" id="tTorch" aria-pressed="false" hidden>ライト</button>
     <input type="file" id="refFile" accept="image/*" hidden>
   </div>
-  <div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
+  <div class="sread" id="sensorRead"></div><div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
     <form class="dishrow" id="dishForm" autocomplete="off"><input id="dish" list="dl" type="text" enterkeyhint="done" placeholder="被写体を入力 例: おにぎり・鳥居・青空" aria-label="被写体"><button type="submit">決定</button></form>
     <datalist id="dl"></datalist>
@@ -406,13 +407,12 @@ function evaluate(){
       const tilt=Math.asin(Math.min(1,Math.hypot(up.x,up.y)))*180/Math.PI;
       if(tilt<2)add('ok','真上で水平です');
       else{const h=Math.abs(up.x)>Math.abs(up.y)?(up.x>0?'右':'左'):(up.y>0?'上':'下');add(tilt<5?'warn':'bad',`${h}側が高い(${tilt.toFixed(0)}°)。平らにしてください`);}
-    }else if(Math.abs(up.z)<.5){
+    }else{
       const roll=Math.atan2(-up.x,up.y)*180/Math.PI;
       if(Math.abs(roll)<1.5)add('ok','水平です');
       else add(Math.abs(roll)<4?'warn':'bad',`${roll>0?'右':'左'}に${Math.abs(roll).toFixed(0)}°傾いています`);
-    }else{
       const down=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI;
-      if(!dish)add('ok',down>=0?`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`:`カメラは上向き ${(-down).toFixed(0)}°`);
+      if(!dish&&Math.abs(up.z)>=.5)add('ok',down>=0?`カメラは下向き ${down.toFixed(0)}°(斜め撮りは約45°が目安)`:`カメラは上向き ${(-down).toFixed(0)}°`);
     }
   }
   if(up&&dish){
@@ -466,7 +466,16 @@ function evaluate(){
 
 /* ---- overlay drawing ---- */
 const ov=$('#ov'),ox=ov.getContext('2d');
+let loopErr='';
 function loop(){
+  try{drawFrame();}catch(e){loopErr=e.message||String(e);}
+  const sr=document.getElementById('sensorRead');
+  if(sr){if(up){const pitch=Math.asin(Math.max(-1,Math.min(1,up.z)))*180/Math.PI,roll=Math.atan2(-up.x,up.y)*180/Math.PI;
+      sr.textContent=`傾きセンサー: 左右${roll.toFixed(0)}° / ${pitch>=0?'下向き':'上向き'}${Math.abs(pitch).toFixed(0)}°`+(loopErr?' / 描画エラー: '+loopErr:'');}
+    else sr.textContent='傾きセンサー: 情報なし'+(loopErr?' / 描画エラー: '+loopErr:'');}
+  requestAnimationFrame(loop);
+}
+function drawFrame(){
   const dpr=devicePixelRatio||1;if(ov.width!==innerWidth*dpr){ov.width=innerWidth*dpr;ov.height=innerHeight*dpr;}
   ox.setTransform(dpr,0,0,dpr,0,0);ox.clearRect(0,0,innerWidth,innerHeight);
   const c=cropRect();
@@ -495,12 +504,11 @@ function loop(){
       ox.strokeStyle=good?'#3ddc97':'#fff';ox.lineWidth=3;ox.beginPath();ox.arc(cx,cy,46,0,7);ox.stroke();
       ox.beginPath();ox.moveTo(cx-10,cy);ox.lineTo(cx+10,cy);ox.moveTo(cx,cy-10);ox.lineTo(cx,cy+10);ox.stroke();
       ox.fillStyle=good?'#3ddc97':'#ffd23f';ox.beginPath();ox.arc(cx+up.x*46/.3,cy-up.y*46/.3,10,0,7);ox.fill();
-    }else if(Math.abs(up.z)<.5){const roll=Math.atan2(-up.x,up.y),good=Math.abs(roll*180/Math.PI)<1.5;
+    }else{const roll=Math.atan2(-up.x,up.y),good=Math.abs(roll*180/Math.PI)<1.5;
       ox.save();ox.translate(cx,cy);ox.rotate(-roll);ox.strokeStyle=good?'#3ddc97':'#ffd23f';ox.lineWidth=3;
       ox.beginPath();ox.moveTo(-90,0);ox.lineTo(-30,0);ox.moveTo(30,0);ox.lineTo(90,0);ox.stroke();ox.restore();
       ox.strokeStyle='rgba(255,255,255,.8)';ox.lineWidth=2;ox.beginPath();ox.moveTo(cx-110,cy);ox.lineTo(cx-95,cy);ox.moveTo(cx+95,cy);ox.lineTo(cx+110,cy);ox.stroke();}
   }
-  requestAnimationFrame(loop);
 }
 setInterval(analyze,250);
 
