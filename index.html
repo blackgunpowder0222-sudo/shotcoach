@@ -90,9 +90,9 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
     <button class="tool" type="button" id="tGhost" aria-pressed="false" hidden>重ねる<br>ON/OFF</button>
     <button class="tool" type="button" id="tAuto" aria-pressed="false">オート<br>撮影</button>
     <button class="tool" type="button" id="tTorch" aria-pressed="false" hidden>ライト</button>
-    <button class="tool" type="button" id="tNative">標準<br>カメラ</button>
+    <button class="tool" type="button" id="tNative">写真を<br>チェック</button>
     <input type="file" id="refFile" accept="image/*" hidden>
-    <input type="file" id="nativeFile" accept="image/*" capture="environment" hidden>
+    <input type="file" id="nativeFile" accept="image/*" hidden>
   </div>
   <div class="sread" id="sensorRead"></div><div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
@@ -545,7 +545,7 @@ $('#shot').onclick=takePhoto;
 $('#mGhost').onclick=()=>{if(!lastBlob||!lastBlob.type.startsWith('image'))return;setGhost(URL.createObjectURL(lastBlob));$('#mClose').click();};
 $('#mClose').onclick=()=>{$('#modal').classList.remove('on');$('#prev').innerHTML='';};
 
-/* ---- shoot the final photo with the phone's own camera app (full quality), then check it here ---- */
+/* ---- check a photo taken with the phone's own camera app (picked from the library); full quality kept ---- */
 $('#tNative').onclick=()=>$('#nativeFile').click();
 $('#nativeFile').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
@@ -564,8 +564,8 @@ $('#nativeFile').onchange=async e=>{
   if(res.subj)svg+=`<circle cx="${cx+cw*res.subj.x}" cy="${cy+ch*res.subj.y}" r="${W/30}" fill="none" stroke="#ff3d81" stroke-width="${W/140}"/>`;
   svg+='</svg>';
   $('#mGhost').hidden=false;
-  $('#prev').innerHTML=`<div class="stillwrap"><img src="${url}" alt="標準カメラで撮った写真">${svg}</div>`;
-  $('#mInfo').innerHTML=`<div class="msg ok"><i></i><span>標準カメラの写真(${W}×${H})。保存すると元の画質のまま保存されます</span></div>`+res.msgs.map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
+  $('#prev').innerHTML=`<div class="stillwrap"><img src="${url}" alt="選んだ写真">${svg}</div>`;
+  $('#mInfo').innerHTML=`<div class="msg ok"><i></i><span>選んだ写真(${W}×${H})。保存すると元の画質のまま保存されます</span></div>`+res.msgs.map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
   $('#mCropRow').hidden=!fmt.r;$('#mCrop').textContent=`${fmt.n}で切り抜いて保存`;
   $('#mCrop').onclick=()=>{const sc=Math.min(1,4800/Math.max(cw,ch));const c=document.createElement('canvas');c.width=Math.round(cw*sc);c.height=Math.round(ch*sc);
     c.getContext('2d').drawImage(im,cx,cy,cw,ch,0,0,c.width,c.height);
