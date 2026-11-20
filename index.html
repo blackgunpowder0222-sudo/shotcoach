@@ -62,6 +62,20 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .start ul{margin:0;padding-left:20px;line-height:1.8;color:#d9d0f0}
 .go{border:0;background:var(--pink);color:#fff;font:inherit;font-weight:900;font-size:18px;padding:16px;border-radius:16px;cursor:pointer}
 .err{color:var(--yellow);font-weight:700}
+.scguide{position:fixed;inset:0;z-index:7;background:#000000f2;overflow:auto;padding:calc(20px + env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left))}
+.scguide[hidden]{display:none}
+.scbox{max-width:460px;margin:0 auto;display:grid;gap:12px;line-height:1.7}
+.scbox h2{margin:0;font-size:20px;color:var(--pink)}
+.scbox p{margin:0;color:#e4dcf7;font-size:14px}
+.scbox ol{margin:0;padding-left:22px;display:grid;gap:8px;font-size:15px}
+.scname{display:flex;gap:8px;align-items:center;margin-top:6px}
+.scname code{background:#ffffff1f;padding:6px 10px;border-radius:8px;font-size:15px;user-select:all}
+.scname button{border:0;background:#ffd23f;color:#1b1233;font:inherit;font-weight:900;padding:6px 12px;border-radius:8px;cursor:pointer}
+.scbox .scnote{font-size:13px;color:#b7a9dc}
+.scbox .row{display:flex;gap:10px}
+.scbox .row button{flex:1;border:0;border-radius:14px;padding:13px 8px;font:inherit;font-weight:900;font-size:15px;cursor:pointer}
+.backbanner{position:fixed;left:50%;transform:translateX(-50%);top:calc(14px + env(safe-area-inset-top));z-index:5;border:0;background:#ffd23f;color:#1b1233;font:inherit;font-weight:900;font-size:15px;padding:12px 18px;border-radius:99px;box-shadow:0 6px 18px #0007;cursor:pointer;max-width:92vw}
+.backbanner[hidden]{display:none}
 .modal{position:fixed;inset:0;z-index:6;background:#000000f2;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px}
 .modal.on{display:flex}
 .modal img,.modal video{max-width:100%;max-height:68vh;border-radius:12px}
@@ -88,6 +102,8 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   <div class="ctrl">
     <div class="tools" id="tools">
       <button class="tool" type="button" id="tNative">写真をチェック</button>
+      <button class="tool" type="button" id="tCam">標準カメラで撮る</button>
+      <button class="tool" type="button" id="tCamHelp" aria-label="標準カメラの設定手順" hidden>?</button>
       <button class="tool" type="button" id="tZebra" aria-pressed="false">白飛び表示</button>
       <button class="tool" type="button" id="tPeak" aria-pressed="false">ピント表示</button>
       <button class="tool" type="button" id="tRef" aria-pressed="false">お手本を選ぶ</button>
@@ -125,6 +141,23 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   <p class="err" id="err" role="alert"></p>
 </div>
 
+<div class="scguide" id="scGuide" hidden>
+  <div class="scbox">
+    <h2>標準カメラを開く準備(最初の1回だけ)</h2>
+    <p>iPhoneでは、Webアプリから直接カメラアプリを開けません。「ショートカット」アプリを経由して開きます。</p>
+    <ol>
+      <li>「ショートカット」アプリを開く</li>
+      <li>右上の「+」を押す</li>
+      <li>「アクションを追加」を押し、検索欄に「Appを開く」と入れて選ぶ</li>
+      <li>「App」の部分を押して「カメラ」を選ぶ</li>
+      <li>上の名前を押して、次の名前に変える(そのままコピーできます)<div class="scname"><code id="scName">ShotCoachカメラ</code><button type="button" id="scCopy">コピー</button></div></li>
+      <li>「完了」を押して、ShotCoachに戻る</li>
+    </ol>
+    <p class="scnote">撮影したら、ShotCoachに戻って「写真をチェック」で構図を確認できます。開くときに「"ショートカット"で開きますか?」と聞かれたら「開く」を押してください。</p>
+    <div class="row"><button class="b2" id="scClose" type="button">あとで</button><button class="b1" id="scDone" type="button">設定した・開く</button></div>
+  </div>
+</div>
+<button type="button" class="backbanner" id="backBanner" hidden>おかえりなさい。撮った写真をチェックする</button>
 <div class="modal" id="modal">
   <div id="prev"></div>
   <div class="minfo" id="mInfo"></div>
@@ -562,6 +595,26 @@ function takePhoto(){
 $('#shot').onclick=takePhoto;
 $('#mGhost').onclick=()=>{if(!lastBlob||!lastBlob.type.startsWith('image'))return;setGhost(URL.createObjectURL(lastBlob));$('#mClose').click();};
 $('#mClose').onclick=()=>{$('#modal').classList.remove('on');$('#prev').innerHTML='';};
+
+/* ---- open the iPhone Camera app through a Shortcut (web apps cannot open it directly) ---- */
+const SC_KEY='shotcoach.scSetup',SC_NAME='ShotCoachカメラ';
+const scReady=()=>{try{return localStorage.getItem(SC_KEY)==='1'}catch(e){return false}};
+let camLaunched=false;
+window.openScheme=u=>{location.href=u;};
+function launchCam(){camLaunched=true;window.openScheme('shortcuts://run-shortcut?name='+encodeURIComponent(SC_NAME));}
+$('#tCam').onclick=()=>{if(scReady())launchCam();else $('#scGuide').hidden=false;};
+$('#scClose').onclick=()=>{$('#scGuide').hidden=true;};
+$('#scDone').onclick=()=>{try{localStorage.setItem(SC_KEY,'1')}catch(e){}$('#scGuide').hidden=true;syncHelp();launchCam();};
+$('#scCopy').onclick=async e=>{const b=e.currentTarget;try{await navigator.clipboard.writeText(SC_NAME);b.textContent='コピーしました';}
+  catch(_){const r=document.createRange();r.selectNodeContents($('#scName'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);b.textContent='選択しました';}};
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&camLaunched){camLaunched=false;$('#backBanner').hidden=false;setTimeout(()=>{$('#backBanner').hidden=true;},15000);}
+});
+$('#backBanner').onclick=()=>{$('#backBanner').hidden=true;$('#nativeFile').click();};
+// long-press help: tapping the button while the guide was dismissed always works; offer the guide again from the photo check banner area
+$('#tCam').oncontextmenu=e=>{e.preventDefault();$('#scGuide').hidden=false;};
+$('#tCamHelp').onclick=()=>{$('#scGuide').hidden=false;};
+const syncHelp=()=>{$('#tCamHelp').hidden=!scReady();};syncHelp();
 
 /* ---- check a photo taken with the phone's own camera app (picked from the library); full quality kept ---- */
 $('#tNative').onclick=()=>$('#nativeFile').click();
