@@ -61,11 +61,19 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .start ul{margin:0;padding-left:20px;line-height:1.8;color:#d9d0f0}
 .go{border:0;background:var(--pink);color:#fff;font:inherit;font-weight:900;font-size:18px;padding:16px;border-radius:16px;cursor:pointer}
 .err{color:var(--yellow);font-weight:700}
-.modal{position:fixed;inset:0;z-index:6;background:#000d;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px}
+.modal{position:fixed;inset:0;z-index:6;background:#000000f2;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px}
 .modal.on{display:flex}
 .modal img,.modal video{max-width:100%;max-height:68vh;border-radius:12px}
 .modal .row{width:100%;max-width:420px}
-.modal button{flex:1;border:0;border-radius:14px;padding:14px;font:inherit;font-weight:900;font-size:16px;cursor:pointer}
+.stillwrap{position:relative;display:inline-block;max-width:100%}
+.stillwrap img{display:block;max-height:62vh}
+.stillwrap svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:12px}
+.minfo{display:grid;gap:6px;width:100%;max-width:420px}
+.minfo:empty{display:none}
+.minfo .msg{font-size:13px}
+.modal .row2{display:flex;gap:10px;width:100%;max-width:420px}
+.modal .row2[hidden]{display:none}
+.modal button{flex:1;border:0;border-radius:14px;padding:13px 8px;font:inherit;font-weight:900;font-size:15px;white-space:nowrap;cursor:pointer}
 .b1{background:var(--pink);color:#fff}.b2{background:#ffffff26;color:#fff}
 button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 </style>
@@ -82,7 +90,9 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
     <button class="tool" type="button" id="tGhost" aria-pressed="false" hidden>重ねる<br>ON/OFF</button>
     <button class="tool" type="button" id="tAuto" aria-pressed="false">オート<br>撮影</button>
     <button class="tool" type="button" id="tTorch" aria-pressed="false" hidden>ライト</button>
+    <button class="tool" type="button" id="tNative">標準<br>カメラ</button>
     <input type="file" id="refFile" accept="image/*" hidden>
+    <input type="file" id="nativeFile" accept="image/*" capture="environment" hidden>
   </div>
   <div class="sread" id="sensorRead"></div><div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
@@ -116,6 +126,8 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 
 <div class="modal" id="modal">
   <div id="prev"></div>
+  <div class="minfo" id="mInfo"></div>
+  <div class="row2" id="mCropRow" hidden><button class="b2" id="mCrop" type="button">枠で切り抜いて保存</button></div>
   <div class="row"><button class="b2" id="mClose" type="button">閉じる</button><button class="b2" id="mGhost" type="button">次に重ねる</button><button class="b1" id="mSave" type="button">保存・共有</button></div>
 </div>
 
@@ -516,7 +528,7 @@ setInterval(analyze,250);
 let lastBlob=null,lastName='';
 function showResult(blob,name,isVideo){
   lastBlob=blob;lastName=name;const u=URL.createObjectURL(blob);
-  $('#mGhost').hidden=!!isVideo;
+  $('#mGhost').hidden=!!isVideo;$('#mInfo').innerHTML='';$('#mCropRow').hidden=true;
   $('#prev').innerHTML=isVideo?`<video src="${u}" controls playsinline autoplay loop muted></video>`:`<img src="${u}" alt="撮影した写真">`;
   $('#modal').classList.add('on');
 }
@@ -532,6 +544,62 @@ function takePhoto(){
 $('#shot').onclick=takePhoto;
 $('#mGhost').onclick=()=>{if(!lastBlob||!lastBlob.type.startsWith('image'))return;setGhost(URL.createObjectURL(lastBlob));$('#mClose').click();};
 $('#mClose').onclick=()=>{$('#modal').classList.remove('on');$('#prev').innerHTML='';};
+
+/* ---- shoot the final photo with the phone's own camera app (full quality), then check it here ---- */
+$('#tNative').onclick=()=>$('#nativeFile').click();
+$('#nativeFile').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const url=URL.createObjectURL(f),im=new Image();im.src=url;
+  try{await im.decode();}catch(err){showResult(f,f.name||`photo-${Date.now()}.jpg`,false);$('#mInfo').innerHTML='<div class="msg warn"><i></i><span>この写真はここでは表示できませんが、保存はできます</span></div>';resumeCam();return;}
+  // keep the original file untouched for saving (no re-encoding = no quality loss)
+  lastBlob=f;lastName=f.name||`photo-${Date.now()}.jpg`;
+  const W=im.naturalWidth,H=im.naturalHeight,r=fmt.r||W/H;
+  let cw=W,ch=H;if(W/H>r)cw=H*r;else ch=W/r;const cx=(W-cw)/2,cy=(H-ch)/2;
+  const res=stillCheck(im,cx,cy,cw,ch);
+  const pt=(t)=>`${cx+cw*t[0]},${cy+ch*t[1]}`;
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+  if(fmt.r)svg+=`<path fill-rule="evenodd" d="M0 0H${W}V${H}H0Z M${cx} ${cy}H${cx+cw}V${cy+ch}H${cx}Z" fill="#000" fill-opacity=".55"/>`;
+  for(const k of [1/3,2/3])svg+=`<line x1="${cx+cw*k}" y1="${cy}" x2="${cx+cw*k}" y2="${cy+ch}" stroke="#fff" stroke-opacity=".6" stroke-width="${W/300}"/><line x1="${cx}" y1="${cy+ch*k}" x2="${cx+cw}" y2="${cy+ch*k}" stroke="#fff" stroke-opacity=".6" stroke-width="${W/300}"/>`;
+  for(const t of gen.t)svg+=`<circle cx="${cx+cw*t[0]}" cy="${cy+ch*t[1]}" r="${W/90}" fill="#ffd23f"/>`;
+  if(res.subj)svg+=`<circle cx="${cx+cw*res.subj.x}" cy="${cy+ch*res.subj.y}" r="${W/30}" fill="none" stroke="#ff3d81" stroke-width="${W/140}"/>`;
+  svg+='</svg>';
+  $('#mGhost').hidden=false;
+  $('#prev').innerHTML=`<div class="stillwrap"><img src="${url}" alt="標準カメラで撮った写真">${svg}</div>`;
+  $('#mInfo').innerHTML=`<div class="msg ok"><i></i><span>標準カメラの写真(${W}×${H})。保存すると元の画質のまま保存されます</span></div>`+res.msgs.map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
+  $('#mCropRow').hidden=!fmt.r;$('#mCrop').textContent=`${fmt.n}で切り抜いて保存`;
+  $('#mCrop').onclick=()=>{const sc=Math.min(1,4800/Math.max(cw,ch));const c=document.createElement('canvas');c.width=Math.round(cw*sc);c.height=Math.round(ch*sc);
+    c.getContext('2d').drawImage(im,cx,cy,cw,ch,0,0,c.width,c.height);
+    c.toBlob(b=>{if(!b)return;lastBlob=b;lastName=`photo-${fmt.id}-${Date.now()}.jpg`;$('#mSave').click();},'image/jpeg',1.0);};
+  $('#modal').classList.add('on');
+  resumeCam();
+};
+function stillCheck(im,sx,sy,sw,sh){
+  const n=72,c=document.createElement('canvas');c.width=c.height=n;const x=c.getContext('2d',{willReadFrequently:true});
+  x.drawImage(im,sx,sy,sw,sh,0,0,n,n);const d=x.getImageData(0,0,n,n).data;
+  let sum=0,blown=0,mr=0,mg=0,mb=0;
+  for(let i=0;i<n*n;i++){const r=d[i*4],g=d[i*4+1],b=d[i*4+2],l=.299*r+.587*g+.114*b;sum+=l;if(l>245)blown++;mr+=r;mg+=g;mb+=b;}
+  const mean=sum/(n*n);mr/=n*n;mg/=n*n;mb/=n*n;const msgs=[];
+  if(mean<55)msgs.push({l:'bad',t:'暗い写真です。明るい場所で撮り直すと良くなります'});
+  else if(mean>195)msgs.push({l:'bad',t:'明るすぎます'});
+  else if(blown/(n*n)>.08)msgs.push({l:'warn',t:'白飛びしている部分があります'});
+  else msgs.push({l:'ok',t:'明るさOK'});
+  const B=24,k=n/B;let tw=0,cx=0,cy=0,maxS=0;const sal=new Float32Array(B*B);
+  for(let by=0;by<B;by++)for(let bx=0;bx<B;bx++){let r=0,g=0,b=0;for(let yy=0;yy<k;yy++)for(let xx=0;xx<k;xx++){const i=((by*k+yy)*n+bx*k+xx)*4;r+=d[i];g+=d[i+1];b+=d[i+2];}
+    r/=k*k;g/=k*k;b/=k*k;const sv=Math.hypot(r-mr,g-mg,b-mb);sal[by*B+bx]=sv;if(sv>maxS)maxS=sv;}
+  for(let i=0;i<B*B;i++){const w=Math.pow(sal[i]/(maxS||1),3);tw+=w;cx+=w*((i%B)+.5)/B;cy+=w*(Math.floor(i/B)+.5)/B;}
+  const subj=maxS>25?{x:cx/tw,y:cy/tw}:null;
+  if(dish&&dish.p<0){}
+  else if(subj){let bd=9;for(const t of gen.t)bd=Math.min(bd,Math.hypot(subj.x-t[0],subj.y-t[1]));
+    msgs.push(bd<.13?{l:'ok',t:'主役が良い位置にいます'}:{l:'warn',t:'主役が目標の位置(黄色い点)から外れています'});}
+  else msgs.push({l:'warn',t:'主役がはっきりしません'});
+  return {msgs,subj};
+}
+// the phone's camera app takes over the camera; restart our preview when we come back
+async function resumeCam(){
+  const v=$('#v'),t=stream?.getVideoTracks?.()[0];
+  try{if(!t||t.readyState==='ended'||v.paused){await startCam();}}catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&stream)resumeCam();});
 $('#mSave').onclick=async()=>{
   if(!lastBlob)return;const f=new File([lastBlob],lastName,{type:lastBlob.type});
   try{if(navigator.canShare?.({files:[f]})){await navigator.share({files:[f]});return;}}catch(e){if(e.name==='AbortError')return;}
