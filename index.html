@@ -29,9 +29,10 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #msgs{display:flex!important;flex-wrap:wrap;gap:6px}
 #msgs .msg{font-size:12px;padding:4px 10px;border-radius:99px}
 #msgs .msg i{width:8px;height:8px}
-.tools{position:absolute;right:max(10px,env(safe-area-inset-right));top:calc(150px + env(safe-area-inset-top));display:grid;gap:8px}
-.tool{width:56px;min-height:50px;border-radius:14px;border:1px solid #ffffff55;background:var(--glass);color:#fff;font:inherit;font-size:11px;font-weight:700;line-height:1.25;cursor:pointer;padding:4px}
-.tool[aria-pressed="true"]{background:var(--pink);border-color:var(--pink)}
+.tools{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}.tools::-webkit-scrollbar{display:none}
+.tool{flex:0 0 auto;border-radius:99px;border:1px solid #ffd23f88;background:var(--glass);color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer;padding:8px 14px}
+.tool[aria-pressed="true"]{background:#ffd23f;border-color:#ffd23f;color:#1b1233}
+.tool[hidden]{display:none}
 .zoomrow{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}.zoomrow[hidden]{display:none}
 .zoomrow input{flex:1;accent-color:var(--pink)}
 .sensor{pointer-events:auto;border:0;background:#ffd23f;color:#1b1233;font:inherit;font-size:14px;font-weight:900;padding:10px 14px;border-radius:12px;width:fit-content;max-width:100%;text-align:left;cursor:pointer;box-shadow:0 4px 14px #0006}
@@ -83,19 +84,19 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   <video id="v" playsinline muted autoplay></video>
   <canvas id="ov"></canvas>
   <div class="hud"><div class="now" id="now">カメラを準備中…</div><div id="msgs"></div><div class="hint" id="hint"></div><button type="button" id="sensorBtn" class="sensor" hidden></button></div>
-  <div class="tools" id="tools">
-    <button class="tool" type="button" id="tZebra" aria-pressed="false">白飛び<br>表示</button>
-    <button class="tool" type="button" id="tPeak" aria-pressed="false">ピント<br>表示</button>
-    <button class="tool" type="button" id="tRef" aria-pressed="false">お手本<br>を選ぶ</button>
-    <button class="tool" type="button" id="tGhost" aria-pressed="false" hidden>重ねる<br>ON/OFF</button>
-    <button class="tool" type="button" id="tAuto" aria-pressed="false">オート<br>撮影</button>
-    <button class="tool" type="button" id="tTorch" aria-pressed="false" hidden>ライト</button>
-    <button class="tool" type="button" id="tNative">写真を<br>チェック</button>
-    <input type="file" id="refFile" accept="image/*" hidden>
-    <input type="file" id="nativeFile" accept="image/*" hidden>
-  </div>
   <div class="sread" id="sensorRead"></div><div class="cue" id="cue"></div><div class="clock" id="clock" hidden></div>
   <div class="ctrl">
+    <div class="tools" id="tools">
+      <button class="tool" type="button" id="tNative">写真をチェック</button>
+      <button class="tool" type="button" id="tZebra" aria-pressed="false">白飛び表示</button>
+      <button class="tool" type="button" id="tPeak" aria-pressed="false">ピント表示</button>
+      <button class="tool" type="button" id="tRef" aria-pressed="false">お手本を選ぶ</button>
+      <button class="tool" type="button" id="tGhost" aria-pressed="false" hidden>重ねるON/OFF</button>
+      <button class="tool" type="button" id="tAuto" aria-pressed="false">オート撮影</button>
+      <button class="tool" type="button" id="tTorch" aria-pressed="false" hidden>ライト</button>
+      <input type="file" id="refFile" accept="image/*" hidden>
+      <input type="file" id="nativeFile" accept="image/*" hidden>
+    </div>
     <form class="dishrow" id="dishForm" autocomplete="off"><input id="dish" list="dl" type="text" enterkeyhint="done" placeholder="被写体を入力 例: おにぎり・鳥居・青空" aria-label="被写体"><button type="submit">決定</button></form>
     <datalist id="dl"></datalist>
     <div class="cats" id="cats" hidden></div>
