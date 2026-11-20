@@ -272,10 +272,24 @@ $('#dishForm').onsubmit=e=>{
 };
 
 /* ---- camera ---- */
+const withTimeout=(pr,ms,label)=>Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error(label),{name:'Timeout'})),ms))]);
 async function startCam(){
   if(stream)stream.getTracks().forEach(t=>t.stop());
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:3840},height:{ideal:2160}},audio:false});
-  const v=$('#v');v.srcObject=stream;await v.play();
+  // home-screen apps start at Full HD (4K requests have been slow there); browsers try 4K first
+  const standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+  const tries=[...(standalone?[]:[{width:{ideal:3840},height:{ideal:2160}}]),{width:{ideal:1920},height:{ideal:1080}},{}];
+  // while the camera permission question may be on screen, wait long; once granted, give up quickly and retry
+  let granted=false;try{granted=(await withTimeout(navigator.permissions.query({name:'camera'}),800,'perm')).state==='granted';}catch(e){}
+  let lastErr=null;
+  for(const [i,size] of tries.entries()){
+    try{
+      stream=await withTimeout(navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},...size},audio:false}),(granted||i>0)?5000:30000,'camera-timeout');
+      lastErr=null;break;
+    }catch(e){lastErr=e;if(e.name==='NotAllowedError'||e.name==='SecurityError')break;}
+  }
+  if(lastErr)throw lastErr;
+  const v=$('#v');v.srcObject=stream;
+  try{await withTimeout(v.play(),4000,'play-timeout');}catch(e){/* some home-screen apps resolve play() late; the video still runs */}
   setupControls();
 }
 let torchOn=false;
@@ -296,14 +310,17 @@ $('#go').onclick=async()=>{
   const err=$('#err');err.textContent='';
   if(!navigator.mediaDevices?.getUserMedia){err.textContent='このブラウザではカメラを使えません。HTTPSのページでSafariかChromeから開いてください。';return;}
   try{
-    // motion permission (iOS) must be requested in the tap handler, before any other await
+    // motion permission (iOS) must be requested in the tap handler; don't let it block the camera
     listenTilt();
-    await askMotion();
+    const motion=askMotion();
+    $('#go').disabled=true;$('#go').textContent='カメラを起動中…';
     await startCam();
     $('#start').style.display='none';
     loop();
-    setTimeout(checkTilt,2500);
-  }catch(e){err.textContent=(e.name==='NotAllowedError'||e.name==='NotSupportedError'||e.name==='SecurityError')?'カメラを使えません。ブラウザの設定でこのページのカメラを許可し、HTTPSのページで開いているか確認してください。':e.name==='NotFoundError'?'カメラが見つかりません。':'カメラを開けませんでした('+e.name+')。';}
+    motion.catch(()=>{});setTimeout(checkTilt,3000);
+  }catch(e){$('#go').disabled=false;$('#go').textContent='カメラを開始';
+    if(e.name==='Timeout'){err.textContent='カメラの起動に時間がかかっています。アプリを完全に閉じて開き直すか、Safariから開いてください。(詳細: '+e.message+')';return;}
+    err.textContent=(e.name==='NotAllowedError'||e.name==='NotSupportedError'||e.name==='SecurityError')?'カメラを使えません。ブラウザの設定でこのページのカメラを許可し、HTTPSのページで開いているか確認してください。':e.name==='NotFoundError'?'カメラが見つかりません。':'カメラを開けませんでした('+e.name+')。';}
 };
 $('#flip').onclick=async()=>{facing=facing==='environment'?'user':'environment';try{await startCam();}catch(e){}};
 
