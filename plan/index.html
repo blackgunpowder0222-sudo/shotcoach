@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1233">
+<title>ShotPlan</title>
+<link rel="manifest" href="manifest.webmanifest?v=1">
+<link rel="apple-touch-icon" href="apple-touch-icon-plan.png?v=1">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-plan.png?v=1">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-plan-32.png">
+<meta name="apple-mobile-web-app-title" content="ShotPlan">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{--ink:#1b1233;--ink2:#251a45;--line:#3a2e63;--fg:#f4efff;--muted:#b7a9dc;--pink:#ff3d81;--yellow:#ffd23f;--ok:#3ddc97;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--ink);color:var(--fg);font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif}
+body{padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.wrap{max-width:560px;margin:0 auto;display:grid;gap:14px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{margin:0;font-size:26px;font-weight:900;color:var(--pink)}
+.sub{margin:2px 0 0;color:var(--muted);font-size:13px}
+.cam{border:1px solid var(--line);background:var(--ink2);color:var(--fg);text-decoration:none;font-weight:800;font-size:13px;padding:9px 14px;border-radius:99px;white-space:nowrap}
+.tabs,.shops{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.tabs::-webkit-scrollbar,.shops::-webkit-scrollbar{display:none}
+.tab,.shop{flex:0 0 auto;border:1px solid var(--line);background:var(--ink2);color:var(--fg);font:inherit;font-weight:800;font-size:14px;padding:9px 15px;border-radius:99px;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--fg);color:var(--ink);border-color:var(--fg)}
+.shop[aria-pressed="true"]{background:var(--pink);border-color:var(--pink);color:#fff}
+.prog{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800;color:var(--muted)}
+.bar{flex:1;height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .25s}
+.reset{border:0;background:none;color:var(--muted);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer}
+.list{display:grid;gap:10px;margin:0;padding:0;list-style:none;counter-reset:n}
+.item{counter-increment:n;background:var(--ink2);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:start}
+.item.done{opacity:.55}
+.chk{width:26px;height:26px;margin-top:2px;accent-color:var(--ok);grid-row:span 3}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.top b{font-size:16px}
+.top b::before{content:counter(n)". ";color:var(--muted);font-weight:700}
+.badge{font-size:11px;font-weight:900;padding:2px 8px;border-radius:99px;background:var(--line)}
+.badge.photo{background:#2b6cff33;color:#9ec0ff}.badge.video{background:#ff3d8133;color:#ff9cc0}
+.badge.hero{background:var(--yellow);color:var(--ink)}
+.tip{margin:0;font-size:14px;line-height:1.6;color:#e4dcf7}
+.go{justify-self:start;margin-top:4px;text-decoration:none;font-weight:900;font-size:13px;color:var(--ink);background:var(--yellow);padding:7px 12px;border-radius:99px}
+.plan{background:var(--ink2);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:8px}
+.plan h2{margin:0;font-size:16px}
+.plan ol{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px;line-height:1.6}
+.plan p{margin:0;font-size:13px;color:var(--muted);line-height:1.6}
+.manners{font-size:12px;color:var(--muted);line-height:1.7;margin:0}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>ShotPlan</h1><p class="sub">お店や場所に着いたら、撮るものを順番にチェック</p></div>
+    <a class="cam" href="../">カメラを開く</a>
+  </header>
+  <div class="tabs" id="tabs" role="group" aria-label="分野"></div>
+  <div class="shops" id="shops" role="group" aria-label="お店・場所"></div>
+  <div class="prog"><span id="progText">0 / 0</span><div class="bar"><i id="progBar"></i></div><button class="reset" id="reset" type="button">チェックを外す</button></div>
+  <ol class="list" id="list"></ol>
+  <section class="plan" id="plan"></section>
+  <p class="manners">撮影の前に、お店の人にひと言「写真を撮ってもいいですか」と聞くと安心です。ほかのお客さんの顔が写らないように気をつけましょう。撮影禁止の場所では撮らないでください。</p>
+</div>
+<script>
+/* item: [title, mode 'p'|'v', camera link 's:<subject>' or 'g:<genre id>', format id, tip, hero?] */
+const COMMON_IN=[
+ ['外観','p','g:shop','feed','正面から水平に。看板と入口を中央線に。店名が読めるように'],
+ ['入口・看板','p','s:看板','feed','暖簾や看板を正面から。手前に植木などを入れると奥行きが出る'],
+];
+const D={
+ '食事系':{
+  'カレー屋':[...COMMON_IN,
+   ['店内の雰囲気','v','g:cafe','reel','席の高さからゆっくり横に動かす(4秒)'],
+   ['メニュー','p','s:メニュー','feed','正面から。名物にピントを合わせる'],
+   ['ナンプレート全体','p','s:ナンプレート','feed','真上から。小皿が全部入るように',1],
+   ['ナンをちぎる','v','s:ナン','reel','斜め45°。チーズが伸びる瞬間を逃さない'],
+   ['カレーのアップ','p','s:インドカレー','feed','斜めから表面のツヤと具を'],
+   ['ビリヤニ','p','s:ビリヤニ','feed','スプーンですくって湯気と米の色を'],
+   ['ラッシー・チャイ','p','s:ラッシー','feed','低めから。グラスの透け感を窓の光で'],
+   ['食べる手元','v','s:ナン','reel','カレーに浸してひと口(3秒)']],
+  'ラーメン屋':[...COMMON_IN,
+   ['券売機・メニュー','p','s:券売機','feed','正面から。押したボタンを指で示すと臨場感'],
+   ['カウンター','v','g:cafe','reel','席の高さから厨房側へゆっくり'],
+   ['着丼の全体','p','s:ラーメン','feed','斜め上から。湯気が見えるうちに',1],
+   ['麺リフト','v','s:ラーメン','reel','箸で持ち上げて止める(3秒)。一番伸びる見せ場'],
+   ['具のアップ','p','s:ラーメン','feed','チャーシューや卵の断面'],
+   ['スープをすする','v','s:ラーメン','reel','レンゲですくって湯気ごと']],
+  '定食屋':[...COMMON_IN,
+   ['店内','p','g:cafe','feed','昭和感や手書きメニューなど、その店らしさを'],
+   ['定食の全体','p','s:定食','feed','真上からお盆ごと',1],
+   ['主菜のアップ','p','s:揚げ物','feed','斜めから断面や焼き目を'],
+   ['味噌汁・ご飯','v','s:定食','reel','湯気とご飯をよそう動き'],
+   ['ひと口','v','s:定食','reel','箸で持ち上げて(3秒)']],
+  '焼肉':[...COMMON_IN,
+   ['肉の盛り合わせ','p','s:焼肉','feed','斜めから。肉のサシとツヤを',1],
+   ['網に乗せる','v','s:焼肉','reel','トングで置く瞬間の音と煙'],
+   ['焼き上がり','p','s:焼肉','feed','低めから焼き目を'],
+   ['ご飯にのせる','v','s:焼肉','reel','タレがしみる瞬間'],
+   ['テーブル全体','p','s:テーブル','feed','真上から品数の多さを']],
+  '寿司':[...COMMON_IN,
+   ['カウンター','p','g:cafe','feed','白木のカウンターを斜めから'],
+   ['握りの並び','p','s:寿司','feed','低めから。ネタのツヤを',1],
+   ['一貫のアップ','p','s:寿司','feed','一番の推しネタを大きく'],
+   ['醤油をつける','v','s:寿司','reel','ネタ側を少しだけ(3秒)'],
+   ['口に運ぶ','v','s:寿司','reel','手元だけでOK']],
+  '居酒屋':[...COMMON_IN,
+   ['乾杯','v','s:乾杯','reel','グラスを合わせる瞬間(2秒)',1],
+   ['料理の並び','p','s:テーブル','feed','真上からテーブル全体'],
+   ['焼き鳥','p','s:焼き鳥','feed','低めから串を斜めに並べて'],
+   ['お酒のアップ','p','s:日本酒','feed','グラスやお猪口を窓や照明の光で'],
+   ['店内の雰囲気','v','g:cafe','reel','提灯や手書きメニューをゆっくり']]
+ },
+ 'カフェ・スイーツ':{
+  'カフェ':[...COMMON_IN,
+   ['店内','v','g:cafe','reel','入口から席までゆっくり歩く'],
+   ['窓際の席','p','s:窓','feed','窓枠を入れて光を感じる1枚'],
+   ['ドリンク','p','s:カフェラテ','feed','低めから。窓の光で透け感を',1],
+   ['ラテアート・注ぐ','v','s:ラテ','reel','注ぐ動きを固定で(4秒)'],
+   ['スイーツ','p','s:ケーキ','feed','低めから断面を'],
+   ['テーブル全体','p','s:テーブル','feed','真上からドリンクとスイーツを並べて']],
+  'パン屋':[...COMMON_IN,
+   ['パンの棚','p','s:陳列','feed','ガラスに近づいて映り込みを避ける',1],
+   ['トングで選ぶ','v','s:陳列','reel','選ぶ手元を(3秒)'],
+   ['買ったパン','p','s:パン','feed','袋から出して並べる'],
+   ['断面','p','s:パン','feed','割った断面と中身を寄りで'],
+   ['かぶりつく','v','s:パン','reel','ひと口(2秒)']],
+  'ケーキ屋':[...COMMON_IN,
+   ['ショーケース','p','s:ショーケース','feed','少し斜めから。照明が映り込まない角度で',1],
+   ['箱を開ける','v','s:パッケージ','reel','ふたを開ける瞬間(3秒)'],
+   ['ケーキの断面','p','s:ケーキ','feed','低めから層を'],
+   ['フォークを入れる','v','s:ケーキ','reel','切る瞬間を固定で']],
+  '和菓子屋':[...COMMON_IN,
+   ['ショーケース','p','s:ショーケース','feed','季節の和菓子が並ぶ様子を',1],
+   ['和菓子のアップ','p','s:和菓子','feed','やや低めから。色と形を'],
+   ['抹茶と一緒に','p','s:抹茶','feed','器を斜めに置いて'],
+   ['切る・割る','v','s:和菓子','reel','黒文字で切る瞬間']]
+ },
+ '物販・その他':{
+  '道の駅・直売所':[
+   ['外観','p','g:shop','feed','建物と駐車場の看板を水平に',1],
+   ['売り場','v','s:陳列','reel','通路をゆっくり歩く(5秒)'],
+   ['野菜・果物','p','s:野菜','feed','色の多い棚を斜め上から'],
+   ['ソフトクリーム','p','s:アイス','feed','空を背景に手で持って'],
+   ['名物グルメ','p','g:food','feed','その土地らしい一品を'],
+   ['お土産','p','s:パッケージ','feed','ラベルが読めるように正面から']],
+  '雑貨屋':[...COMMON_IN,
+   ['店内','v','g:cafe','reel','棚に沿ってゆっくり横に'],
+   ['棚・陳列','p','s:陳列','feed','色のまとまりがある棚を正面から',1],
+   ['気になる雑貨','p','s:雑貨','feed','無地の背景で寄り'],
+   ['手に取る','v','s:雑貨','reel','手に取って回す(3秒)']],
+  '花屋':[...COMMON_IN,
+   ['店先の花','p','s:花','feed','低めから色の多さを',1],
+   ['一輪のアップ','p','s:バラ','feed','近づいて背景をぼかす'],
+   ['花束を作る','v','s:花束','reel','手元を許可を得て'],
+   ['できた花束','p','s:花束','feed','無地の壁の前で']],
+  'ホテル・旅館':[
+   ['外観','p','s:建物','feed','少し離れて水平に。見上げない',1],
+   ['ロビー','v','g:cafe','reel','入口から奥へゆっくり'],
+   ['部屋','p','g:cafe','feed','部屋の角から全体を水平に'],
+   ['部屋からの景色','p','s:窓','feed','窓枠を入れて'],
+   ['食事','p','s:御膳','feed','真上からお膳全体'],
+   ['温泉・大浴場','p','g:view','feed','人がいないときだけ。撮影可か確認を']]
+ },
+ '観光地':{
+  '神社仏閣':[
+   ['鳥居','p','s:鳥居','feed','正面から水平に、左右対称に',1],
+   ['参道','v','s:参道','reel','鳥居をくぐって歩く(5秒)'],
+   ['本殿','p','s:本殿','feed','少し離れて水平に。見上げない'],
+   ['手水舎・お守り','p','s:雑貨','feed','寄りで細部を'],
+   ['御朱印','p','s:本','feed','真上から'],
+   ['境内の自然','p','s:紅葉','feed','季節の木々や花を見上げて']],
+  '公園・花の名所':[
+   ['入口・全景','p','g:view','feed','水平線を三分割の線に'],
+   ['花畑','p','s:花畑','feed','低く構えて手前の花を大きく',1],
+   ['一輪のアップ','p','s:バラ','feed','近づいて背景をぼかす'],
+   ['歩く後ろ姿','v','s:後ろ姿','reel','花の間を歩く(4秒)'],
+   ['空と一緒に','p','s:青空','feed','見上げて空を背景に']],
+  '海・川':[
+   ['全景','p','s:海','feed','水平線を水平に、三分割の線に',1],
+   ['波・流れ','v','s:海','reel','同じ構図で4秒固定'],
+   ['足元','v','s:海','reel','波打ち際を歩く足元'],
+   ['後ろ姿','p','s:後ろ姿','feed','人を三分割の縦線に'],
+   ['夕焼け','p','s:夕焼け','feed','空をタップして少し暗めに']],
+  '夜景・イベント':[
+   ['夜景の全景','p','s:夜景','feed','肘を固定して手ブレを防ぐ',1],
+   ['イルミネーション','v','s:イルミネーション','reel','ゆっくり歩きながら'],
+   ['屋台・看板','p','s:ネオン','feed','明るい文字は画面タップで暗めに'],
+   ['食べ歩き','v','g:food','reel','手に持って(3秒)'],
+   ['人物','p','s:後ろ姿','feed','光を背景に後ろ姿で']]
+ }
+};
+const $=s=>document.querySelector(s);
+const KEY='shotplan.v1';
+const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}};
+const save=o=>{try{localStorage.setItem(KEY,JSON.stringify(o))}catch(e){}};
+let st=load(),cat=st.cat&&D[st.cat]?st.cat:'食事系',shop=st.shop&&D[cat][st.shop]?st.shop:Object.keys(D[cat])[0];
+const camLink=(lnk,f)=>{const [k,v]=lnk.split(':');return `../?${k}=${encodeURIComponent(v)}&f=${f}`;};
+const esc=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function chips(el,list,cur,cls,onPick){el.innerHTML=list.map(n=>`<button type="button" class="${cls}" aria-pressed="${n===cur}">${esc(n)}</button>`).join('');
+  [...el.children].forEach((b,i)=>b.onclick=()=>onPick(list[i]));}
+function render(){
+  chips($('#tabs'),Object.keys(D),cat,'tab',c=>{cat=c;shop=Object.keys(D[c])[0];persist();render();});
+  chips($('#shops'),Object.keys(D[cat]),shop,'shop',s=>{shop=s;persist();render();});
+  const items=D[cat][shop],done=(st.done||{})[shop]||[];
+  $('#list').innerHTML=items.map((it,i)=>{const [t,m,l,f,tip,hero]=it;const on=done.includes(i);
+    return `<li class="item${on?' done':''}"><input class="chk" type="checkbox" data-i="${i}" ${on?'checked':''} aria-label="${esc(t)}を撮った">
+      <div class="top"><b>${esc(t)}</b><span class="badge ${m==='v'?'video':'photo'}">${m==='v'?'動画':'写真'}</span>${hero?'<span class="badge hero">1枚目候補</span>':''}</div>
+      <p class="tip">${esc(tip)}</p>
+      <a class="go" href="${camLink(l,f)}">カメラで撮る →</a></li>`;}).join('');
+  $('#list').querySelectorAll('.chk').forEach(c=>c.onchange=()=>{const d=st.done||(st.done={});const a=new Set(d[shop]||[]);c.checked?a.add(+c.dataset.i):a.delete(+c.dataset.i);d[shop]=[...a];persist();render();});
+  const n=done.length,N=items.length;$('#progText').textContent=`${n} / ${N} 撮影済み`;$('#progBar').style.width=(N?n/N*100:0)+'%';
+  // posting plan
+  const photos=items.filter(x=>x[1]==='p'),videos=items.filter(x=>x[1]==='v');
+  const hero=photos.find(x=>x[5])||photos[0];const car=[hero,...photos.filter(x=>x!==hero)].slice(0,7);
+  const sec=videos.length?Math.max(2,Math.round(15/videos.length)):0;
+  $('#plan').innerHTML=`<h2>投稿プラン</h2>
+   <p><b>カルーセル(写真${car.length}枚)</b>:1枚目は一番目を引く写真、最後に保存したくなる情報を。</p>
+   <ol>${car.map(x=>`<li>${esc(x[0])}</li>`).join('')}</ol>
+   ${videos.length?`<p><b>リール(約15秒)</b>:冒頭1〜3秒で一番の見せ場を。1カット約${sec}秒。</p><ol>${videos.map(x=>`<li>${esc(x[0])}</li>`).join('')}</ol>`:''}
+   <p>キャプションには店名・場所・おすすめを1行で。位置情報タグも忘れずに。</p>`;
+}
+function persist(){st.cat=cat;st.shop=shop;save(st);}
+$('#reset').onclick=()=>{const d=st.done||{};d[shop]=[];st.done=d;persist();render();};
+render();
+</script>
+</body>
+</html>
