@@ -44,6 +44,13 @@ h1{margin:0;font-size:26px;font-weight:900;color:var(--pink)}
 .badge.hero{background:var(--yellow);color:var(--ink)}
 .tip{margin:0;font-size:14px;line-height:1.6;color:#e4dcf7}
 .go{justify-self:start;margin-top:4px;text-decoration:none;font-weight:900;font-size:13px;color:var(--ink);background:var(--yellow);padding:7px 12px;border-radius:99px}
+.caution{background:#2a1f12;border:1px solid #6b4f12;border-radius:16px;padding:12px 14px}
+.caution summary{cursor:pointer;font-weight:900;color:var(--yellow);font-size:15px;list-style:none}
+.caution summary::-webkit-details-marker{display:none}
+.caution summary::after{content:" ▼";font-size:11px}
+.caution[open] summary::after{content:" ▲"}
+.caution ul{margin:10px 0 0;padding-left:20px;display:grid;gap:6px;font-size:14px;line-height:1.6;color:#f3e6c4}
+.badge.info{background:#3ddc9733;color:#8ff0c4}
 .plan{background:var(--ink2);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:8px}
 .plan h2{margin:0;font-size:16px}
 .plan ol{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px;line-height:1.6}
@@ -61,9 +68,9 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
   <div class="tabs" id="tabs" role="group" aria-label="分野"></div>
   <div class="shops" id="shops" role="group" aria-label="お店・場所"></div>
   <div class="prog"><span id="progText">0 / 0</span><div class="bar"><i id="progBar"></i></div><button class="reset" id="reset" type="button">チェックを外す</button></div>
+  <details class="caution" id="caution"><summary id="cautionTitle">撮る前に確認</summary><ul id="cautionList"></ul></details>
   <ol class="list" id="list"></ol>
   <section class="plan" id="plan"></section>
-  <p class="manners">撮影の前に、お店の人にひと言「写真を撮ってもいいですか」と聞くと安心です。ほかのお客さんの顔が写らないように気をつけましょう。撮影禁止の場所では撮らないでください。</p>
 </div>
 <script>
 /* item: [title, mode 'p'|'v', camera link 's:<subject>' or 'g:<genre id>', format id, tip, hero?] */
@@ -108,8 +115,8 @@ const D={
    ['醤油をつける','v','s:寿司','reel','ネタ側を少しだけ(3秒)'],
    ['口に運ぶ','v','s:寿司','reel','手元だけでOK']],
   '居酒屋':[...COMMON_IN,
-   ['乾杯','v','s:乾杯','reel','グラスを合わせる瞬間(2秒)',1],
-   ['料理の並び','p','s:テーブル','feed','真上からテーブル全体'],
+   ['乾杯','v','s:乾杯','reel','グラスを合わせる瞬間(2秒)。リールの冒頭に'],
+   ['料理の並び','p','s:テーブル','feed','真上からテーブル全体',1],
    ['焼き鳥','p','s:焼き鳥','feed','低めから串を斜めに並べて'],
    ['お酒のアップ','p','s:日本酒','feed','グラスやお猪口を窓や照明の光で'],
    ['店内の雰囲気','v','g:cafe','reel','提灯や手書きメニューをゆっくり']]
@@ -193,8 +200,35 @@ const D={
    ['人物','p','s:後ろ姿','feed','光を背景に後ろ姿で']]
  }
 };
+/* menu / price items: saved-for-later info, placed last in the carousel */
+const MENU=['メニュー','p','s:メニュー','feed','全体を正面から1枚、名物の部分を寄りで1枚。値段が読めると保存されやすい',0,1];
+const PRICE=['値札・商品名','p','s:メニュー','feed','商品名と値段が読めるように正面から。ガラス越しなら近づいて映り込みを防ぐ',0,1];
+const addAfter=(list,title,item)=>{const i=list.findIndex(x=>x[0]===title);list.splice(i<0?2:i+1,0,item);};
+for(const sh of ['定食屋','焼肉','寿司','居酒屋'])addAfter(D['食事系'][sh],'入口・看板',MENU);
+addAfter(D['カフェ・スイーツ']['カフェ'],'店内',MENU);
+addAfter(D['カフェ・スイーツ']['パン屋'],'パンの棚',PRICE);
+addAfter(D['カフェ・スイーツ']['ケーキ屋'],'ショーケース',PRICE);
+addAfter(D['カフェ・スイーツ']['和菓子屋'],'ショーケース',PRICE);
+addAfter(D['物販・その他']['道の駅・直売所'],'野菜・果物',['値札・産地表示','p','s:メニュー','feed','手書きのポップや生産者名は、その土地らしさが伝わる',0,1]);
+for(const sh of ['カレー屋'])D['食事系'][sh].forEach(x=>{if(x[0]==='メニュー'){x[4]=MENU[4];x[6]=1;}});
+D['食事系']['ラーメン屋'].forEach(x=>{if(x[0]==='券売機・メニュー')x[6]=1;});
+
+const CAUTION_COMMON=[
+ '撮る前に、お店の人に「写真を撮ってもいいですか」とひと声かける',
+ 'ほかのお客さんや店員さんの顔が写らないようにする(写ったら投稿前に切り抜くか、ぼかす)',
+ 'フラッシュは使わない(周りの迷惑になり、料理もテカって見える)',
+ '通路や入口をふさがない。三脚や自撮り棒は使ってよいか確認する'
+];
+const CAUTION={
+ '食事系':['入口やメニューに「撮影禁止」「SNS投稿禁止」の掲示がないか確認する','料理は1〜2分で撮り終えて、温かいうちに食べる','混んでいるときは店内の撮影を控え、自分の席の範囲だけにする','位置情報タグ付きの投稿は、お店を出てからにすると安心(今いる場所が知られないため)'],
+ 'カフェ・スイーツ':['入口やメニューに「撮影禁止」の掲示がないか確認する','ショーケースは並んでいる人の邪魔にならないよう、空いているときに撮る','ドリンクの氷やクリームは溶ける前に、1〜2分で撮り終える','位置情報タグ付きの投稿は、お店を出てからにすると安心'],
+ '物販・その他':['商品を勝手に動かしたり開けたりしない。動かすのは買ってから','ほかの人の買い物かごや、駐車場の車のナンバーが写らないようにする','ホテル・旅館では、ほかの宿泊客や部屋番号を写さない。大浴場や温泉は撮影禁止のことが多い'],
+ '観光地':['本殿の中や仏像など、撮影禁止の場所が多い。掲示を必ず確認する','お参りしている人や行列を正面から撮らない','立ち入り禁止の場所に入らない。ドローンは許可が必要な場所が多い','人混みで立ち止まって撮らない。子どもの顔が写らないように気をつける']
+};
+const POSTING=['お店や施設のアカウントがあればタグ付けする(リポストされることもある)','レシートや予約画面を載せるときは、名前やカード番号が写っていないか確認する','メニューや値札の写真は、最後の1枚にすると保存されやすい'];
+
 const $=s=>document.querySelector(s);
-const KEY='shotplan.v1';
+const KEY='shotplan.v2'; // v2: items were inserted, old index-based checks would point at the wrong rows
 const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}};
 const save=o=>{try{localStorage.setItem(KEY,JSON.stringify(o))}catch(e){}};
 let st=load(),cat=st.cat&&D[st.cat]?st.cat:'食事系',shop=st.shop&&D[cat][st.shop]?st.shop:Object.keys(D[cat])[0];
@@ -208,20 +242,24 @@ function render(){
   const items=D[cat][shop],done=(st.done||{})[shop]||[];
   $('#list').innerHTML=items.map((it,i)=>{const [t,m,l,f,tip,hero]=it;const on=done.includes(i);
     return `<li class="item${on?' done':''}"><input class="chk" type="checkbox" data-i="${i}" ${on?'checked':''} aria-label="${esc(t)}を撮った">
-      <div class="top"><b>${esc(t)}</b><span class="badge ${m==='v'?'video':'photo'}">${m==='v'?'動画':'写真'}</span>${hero?'<span class="badge hero">1枚目候補</span>':''}</div>
+      <div class="top"><b>${esc(t)}</b><span class="badge ${m==='v'?'video':'photo'}">${m==='v'?'動画':'写真'}</span>${hero?'<span class="badge hero">1枚目候補</span>':''}${it[6]?'<span class="badge info">最後の1枚候補</span>':''}</div>
       <p class="tip">${esc(tip)}</p>
       <a class="go" href="${camLink(l,f)}">カメラで撮る →</a></li>`;}).join('');
   $('#list').querySelectorAll('.chk').forEach(c=>c.onchange=()=>{const d=st.done||(st.done={});const a=new Set(d[shop]||[]);c.checked?a.add(+c.dataset.i):a.delete(+c.dataset.i);d[shop]=[...a];persist();render();});
   const n=done.length,N=items.length;$('#progText').textContent=`${n} / ${N} 撮影済み`;$('#progBar').style.width=(N?n/N*100:0)+'%';
   // posting plan
   const photos=items.filter(x=>x[1]==='p'),videos=items.filter(x=>x[1]==='v');
-  const hero=photos.find(x=>x[5])||photos[0];const car=[hero,...photos.filter(x=>x!==hero)].slice(0,7);
+  const hero=photos.find(x=>x[5])||photos[0],info=photos.filter(x=>x[6]&&x!==hero);
+  const mid=photos.filter(x=>x!==hero&&!x[6]).slice(0,Math.max(0,7-1-info.length));const car=[hero,...mid,...info];
   const sec=videos.length?Math.max(2,Math.round(15/videos.length)):0;
   $('#plan').innerHTML=`<h2>投稿プラン</h2>
    <p><b>カルーセル(写真${car.length}枚)</b>:1枚目は一番目を引く写真、最後に保存したくなる情報を。</p>
    <ol>${car.map(x=>`<li>${esc(x[0])}</li>`).join('')}</ol>
    ${videos.length?`<p><b>リール(約15秒)</b>:冒頭1〜3秒で一番の見せ場を。1カット約${sec}秒。</p><ol>${videos.map(x=>`<li>${esc(x[0])}</li>`).join('')}</ol>`:''}
-   <p>キャプションには店名・場所・おすすめを1行で。位置情報タグも忘れずに。</p>`;
+   <p>キャプションには店名・場所・おすすめを1行で。位置情報タグも忘れずに。</p>
+   <p><b>投稿するとき</b></p><ol>${POSTING.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`;
+  const cl=[...CAUTION_COMMON,...(CAUTION[cat]||[])];
+  $('#cautionTitle').textContent=`撮る前に確認(${cl.length}項目)`;$('#cautionList').innerHTML=cl.map(x=>`<li>${esc(x)}</li>`).join('');
 }
 function persist(){st.cat=cat;st.shop=shop;save(st);}
 $('#reset').onclick=()=>{const d=st.done||{};d[shop]=[];st.done=d;persist();render();};
