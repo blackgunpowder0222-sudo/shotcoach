@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b1233">
+<title>ShotEdit</title>
+<link rel="manifest" href="manifest.webmanifest?v=1">
+<link rel="apple-touch-icon" href="apple-touch-icon-edit.png?v=1">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-edit.png?v=1">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-edit-32.png">
+<meta name="apple-mobile-web-app-title" content="ShotEdit">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{--ink:#1b1233;--ink2:#251a45;--line:#3a2e63;--fg:#f4efff;--muted:#b7a9dc;--pink:#ff3d81;--yellow:#ffd23f;--ok:#3ddc97;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:#0f0a1f;color:var(--fg);font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif}
+body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px max(14px,env(safe-area-inset-right)) 8px max(14px,env(safe-area-inset-left))}
+h1{margin:0;font-size:22px;font-weight:900;color:var(--pink)}
+.hbtn{border:1px solid var(--line);background:var(--ink2);color:var(--fg);font:inherit;font-weight:800;font-size:13px;padding:9px 14px;border-radius:99px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.hbtn.primary{background:var(--pink);border-color:var(--pink);color:#fff}
+.hbtn:disabled{opacity:.4}
+.stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:6px max(10px,env(safe-area-inset-right)) 6px max(10px,env(safe-area-inset-left));touch-action:none}
+#view{max-width:100%;max-height:100%;display:block;border-radius:6px;background:#000}
+#ov{position:absolute;pointer-events:none}
+.empty{text-align:center;color:var(--muted);display:grid;gap:14px;justify-items:center;padding:20px}
+.empty b{color:var(--fg);font-size:18px}
+.cmp{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:12px;border:0;background:#000a;color:#fff;font:inherit;font-weight:800;font-size:12px;padding:8px 12px;border-radius:99px;user-select:none;-webkit-user-select:none;touch-action:none}
+.busy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#0008;font-weight:900}
+.busy[hidden]{display:none}
+.panel{background:var(--ink);border-top:1px solid var(--line);padding:10px max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));display:grid;gap:10px}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;border:1px solid var(--line);background:var(--ink2);color:var(--fg);font:inherit;font-weight:800;font-size:13px;padding:8px 14px;border-radius:99px;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--fg);color:var(--ink)}
+.pane{display:none;gap:8px;max-height:34vh;overflow:auto}.pane.on{display:grid}
+.row{display:grid;grid-template-columns:5.5em 1fr 2.6em;align-items:center;gap:10px;font-size:13px;font-weight:700}
+.row input[type=range]{width:100%;accent-color:var(--pink)}
+.row output{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--ink2);color:var(--fg);font:inherit;font-weight:800;font-size:13px;padding:8px 14px;border-radius:99px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--pink);border-color:var(--pink);color:#fff}
+.chip.go{background:var(--yellow);color:var(--ink);border-color:var(--yellow)}
+.note{margin:0;font-size:12px;color:var(--muted);line-height:1.6}
+.verdict{margin:0;font-size:14px;line-height:1.6;background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>ShotEdit</h1>
+  <div style="display:flex;gap:8px">
+    <button class="hbtn" id="pick" type="button">写真を選ぶ</button>
+    <button class="hbtn primary" id="save" type="button" disabled>保存</button>
+  </div>
+  <input type="file" id="file" accept="image/*" hidden>
+</header>
+<div class="stage" id="stage">
+  <div class="empty" id="empty"><b>加工する写真を選んでください</b><span>逆光の補正、色や肌の調整、写り込みを消す、切り抜きができます</span><button class="hbtn primary" id="pick2" type="button">写真を選ぶ</button><a class="hbtn" href="../">カメラに戻る</a></div>
+  <canvas id="view" hidden></canvas>
+  <canvas id="ov" hidden></canvas>
+  <button class="cmp" id="cmp" type="button" hidden>押している間 元の写真</button>
+  <div class="busy" id="busy" hidden>処理中…</div>
+</div>
+<div class="panel" id="panel" hidden>
+  <div class="tabs" id="tabs"></div>
+  <section class="pane on" data-p="auto">
+    <p class="verdict" id="verdict">写真を判定しています…</p>
+    <div class="chips" id="presets"></div>
+    <p class="note">プリセットを押すと、その写真に合わせて調整します。細かい調整は「光」「色」「肌」で。</p>
+  </section>
+  <section class="pane" data-p="light"></section>
+  <section class="pane" data-p="color"></section>
+  <section class="pane" data-p="skin"></section>
+  <section class="pane" data-p="erase">
+    <p class="note">消したいもの(後ろの人、ゴミなど)を指でなぞって「消す」を押します。周りの模様で埋めるので、小さいものほど自然に消えます。大きく写った人は不自然になりやすいです。</p>
+    <div class="row"><label for="brush">筆の太さ</label><input type="range" id="brush" min="8" max="80" value="28"><output id="brushV">28</output></div>
+    <div class="chips"><button class="chip go" id="eraseGo" type="button">なぞった所を消す</button><button class="chip" id="eraseClear" type="button">なぞり直す</button><button class="chip" id="eraseUndo" type="button">1つ戻す</button></div>
+  </section>
+  <section class="pane" data-p="crop">
+    <div class="chips" id="aspects"></div>
+    <div class="row"><label for="rot">傾き</label><input type="range" id="rot" min="-10" max="10" step="0.1" value="0"><output id="rotV">0°</output></div>
+    <p class="note">写真をドラッグすると、切り抜く位置を動かせます。</p>
+  </section>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+/* ---------------- state ---------------- */
+let full=null;          // original image (ImageBitmap/HTMLImageElement), full resolution
+let fileName='photo.jpg';
+let base=null;          // working copy before geometry (canvas, <= WORK px), erasures applied here
+const WORK=1600, EXPORT_MAX=4096;
+const erasures=[];      // {mask:Uint8Array at base size, before:ImageData} for undo + export
+const P0={ev:0,contrast:0,highlights:0,shadows:0,warmth:0,tint:0,saturation:0,vibrance:0,sharpen:0,vignette:0,skinBright:0,skinRed:0,smooth:0};
+let P={...P0};
+const G={rot:0,aspect:null,cx:.5,cy:.5}; // geometry
+let tab='auto';
+/* ---------------- sliders ---------------- */
+const SL={
+ light:[['ev','明るさ',-100,100],['shadows','暗い所',-100,100],['highlights','明るい所',-100,100],['contrast','コントラスト',-100,100],['vignette','周辺',-100,100]],
+ color:[['warmth','暖かさ',-100,100],['tint','色かぶり',-100,100],['vibrance','鮮やかさ',-100,100],['saturation','彩度',-100,100],['sharpen','くっきり',0,100]],
+ skin:[['skinBright','肌の明るさ',-100,100],['skinRed','肌の赤み',-100,100],['smooth','なめらか',0,100]]
+};
+const toUI=k=>k==='ev'?Math.round(P.ev*50):Math.round(P[k]);
+const fromUI=(k,v)=>k==='ev'?v/50:v;
+for(const [pane,list] of Object.entries(SL)){
+  const el=document.querySelector(`.pane[data-p="${pane}"]`);
+  el.innerHTML=list.map(([k,l,a,b])=>`<div class="row"><label for="s_${k}">${l}</label><input type="range" id="s_${k}" min="${a}" max="${b}" value="0"><output id="o_${k}">0</output></div>`).join('')
+   +(pane==='skin'?'<p class="note">肌の色に近い部分だけに効きます。料理や木の色に少し影響することがあります。</p>':'');
+  for(const [k] of list){const i=$('#s_'+k);i.oninput=()=>{P[k]=fromUI(k,+i.value);$('#o_'+k).textContent=i.value;schedule();};}
+}
+function syncSliders(){for(const list of Object.values(SL))for(const [k] of list){const v=toUI(k);$('#s_'+k).value=v;$('#o_'+k).textContent=v;}}
+const TABS=[['auto','おまかせ'],['light','光'],['color','色'],['skin','肌'],['erase','消す'],['crop','切り抜き']];
+$('#tabs').innerHTML=TABS.map(([k,l])=>`<button type="button" class="tab" data-t="${k}" aria-pressed="${k==='auto'}">${l}</button>`).join('');
+$('#tabs').querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;$('#tabs').querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.dataset.p===tab));clearMask();render();});
+const ASP=[['元のまま',null],['4:5 フィード',4/5],['1:1',1],['9:16 リール',9/16],['1.91:1 横',1.91]];
+$('#aspects').innerHTML=ASP.map(([l],i)=>`<button type="button" class="chip" data-i="${i}" aria-pressed="${i===0}">${l}</button>`).join('');
+$('#aspects').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{G.aspect=ASP[+b.dataset.i][1];G.cx=G.cy=.5;$('#aspects').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));geoDirty();});
+$('#rot').oninput=()=>{G.rot=+$('#rot').value;$('#rotV').textContent=G.rot.toFixed(1)+'°';geoDirty();};
+$('#brush').oninput=()=>{$('#brushV').textContent=$('#brush').value;};
+
+/* ---------------- image loading ---------------- */
+$('#pick').onclick=$('#pick2').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)loadBlob(f,f.name);};
+async function loadBlob(blob,name){
+  busy(true);
+  try{
+    let img;try{img=await createImageBitmap(blob,{imageOrientation:'from-image'});}catch(_){img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(blob);});}
+    full=img;fileName=(name||'photo').replace(/\.[^.]+$/,'')+'-edit.jpg';
+    const w=img.width,h=img.height,s=Math.min(1,WORK/Math.max(w,h));
+    base=document.createElement('canvas');base.width=Math.round(w*s);base.height=Math.round(h*s);base.getContext('2d').drawImage(img,0,0,base.width,base.height);
+    erasures.length=0;P={...P0};Object.assign(G,{rot:0,aspect:null,cx:.5,cy:.5});$('#rot').value=0;$('#rotV').textContent='0°';
+    $('#aspects').querySelectorAll('.chip').forEach((x,i)=>x.setAttribute('aria-pressed',i===0));
+    $('#empty').hidden=true;$('#view').hidden=false;$('#ov').hidden=false;$('#cmp').hidden=false;$('#panel').hidden=false;$('#save').disabled=false;
+    geoDirty(false);autoAdjust();
+  }catch(err){alertBox('この写真は読み込めませんでした。別の写真を選んでください。');}
+  busy(false);
+}
+function alertBox(t){$('#verdict').textContent=t;}
+const busy=on=>{$('#busy').hidden=!on;};
+
+/* ---------------- geometry: rotate (cover) + crop ---------------- */
+function geoRect(w,h){
+  const a=Math.abs(G.rot)*Math.PI/180,s=Math.max((w*Math.cos(a)+h*Math.sin(a))/w,(w*Math.sin(a)+h*Math.cos(a))/h);
+  let cw=w,ch=h;if(G.aspect){if(w/h>G.aspect)cw=h*G.aspect;else ch=w/G.aspect;}
+  const x=Math.max(0,Math.min(w-cw,G.cx*w-cw/2)),y=Math.max(0,Math.min(h-ch,G.cy*h-ch/2));
+  return {s,x,y,cw,ch};
+}
+function applyGeo(src,w,h,outScale=1){ // src drawable of size w x h -> canvas of crop size
+  const r=geoRect(w,h),c=document.createElement('canvas');c.width=Math.max(1,Math.round(r.cw*outScale));c.height=Math.max(1,Math.round(r.ch*outScale));
+  const x=c.getContext('2d');x.imageSmoothingQuality='high';x.scale(outScale,outScale);x.translate(-r.x,-r.y);
+  x.translate(w/2,h/2);x.rotate(G.rot*Math.PI/180);x.scale(r.s,r.s);x.drawImage(src,-w/2,-h/2,w,h);return c;
+}
+/* ---------------- pixel helpers ---------------- */
+function boxBlur(src,w,h,r,ch){ // ch channels interleaved Float32Array
+  if(r<1)return src.slice();const tmp=new Float32Array(src.length),out=new Float32Array(src.length);
+  for(let y=0;y<h;y++){for(let c=0;c<ch;c++){let acc=0;const row=y*w;for(let x=-r;x<=r;x++)acc+=src[(row+Math.min(w-1,Math.max(0,x)))*ch+c];
+    for(let x=0;x<w;x++){tmp[(row+x)*ch+c]=acc/(2*r+1);acc+=src[(row+Math.min(w-1,x+r+1))*ch+c]-src[(row+Math.max(0,x-r))*ch+c];}}}
+  for(let x=0;x<w;x++){for(let c=0;c<ch;c++){let acc=0;for(let y=-r;y<=r;y++)acc+=tmp[(Math.min(h-1,Math.max(0,y))*w+x)*ch+c];
+    for(let y=0;y<h;y++){out[(y*w+x)*ch+c]=acc/(2*r+1);acc+=tmp[(Math.min(h-1,y+r+1)*w+x)*ch+c]-tmp[(Math.max(0,y-r)*w+x)*ch+c];}}}
+  return out;
+}
+const blur2=(a,w,h,r,ch)=>boxBlur(boxBlur(a,w,h,r,ch),w,h,r,ch);
+const sstep=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t);};
+// skin likelihood from YCbCr (classic range, soft edges)
+function skinW(r,g,b){const cb=128-37.797*r-74.203*g+112*b,cr=128+112*r-93.786*g-18.214*b,y=.299*r+.587*g+.114*b;
+  if(y<.15)return 0;return sstep(72,82,cb)*(1-sstep(122,132,cb))*sstep(128,138,cr)*(1-sstep(168,178,cr));}
+/* precomputed buffers for the current geometry image (depend only on the image, not on sliders) */
+let cache=null;
+function prepare(canvas){
+  const w=canvas.width,h=canvas.height,d=canvas.getContext('2d').getImageData(0,0,w,h).data,n=w*h;
+  const rgb=new Float32Array(n*3),L=new Float32Array(n),sk=new Float32Array(n);
+  for(let i=0;i<n;i++){const r=d[i*4]/255,g=d[i*4+1]/255,b=d[i*4+2]/255;rgb[i*3]=r;rgb[i*3+1]=g;rgb[i*3+2]=b;L[i]=.299*r+.587*g+.114*b;sk[i]=skinW(r,g,b);}
+  const m=Math.min(w,h);
+  return {w,h,rgb,L,sk:blur2(sk,w,h,Math.max(1,Math.round(m*.004)),1),baseL:null,smoothRGB:null,detail:null,_m:m};
+}
+function lazy(c,key){
+  if(c[key])return c[key];const {w,h,_m:m}=c;
+  if(key==='baseL')c.baseL=blur2(c.L,w,h,Math.max(2,Math.round(m*.03)),1);
+  if(key==='smoothRGB')c.smoothRGB=blur2(c.rgb,w,h,Math.max(1,Math.round(m*.006)),3);
+  if(key==='detail')c.detail=boxBlur(c.rgb,w,h,1,3);
+  return c[key];
+}
+/* tone pipeline: returns ImageData */
+function process(c,p){
+  const {w,h,rgb,sk}=c,n=w*h,out=new ImageData(w,h),o=out.data;
+  const needBase=p.shadows||p.highlights,bl=needBase?lazy(c,'baseL'):null,sm=p.smooth?lazy(c,'smoothRGB'):null,dt=p.sharpen?lazy(c,'detail'):null;
+  const ex=Math.pow(2,p.ev),wa=p.warmth/100,ti=p.tint/100,co=p.contrast/100,sa=p.saturation/100,vi=p.vibrance/100,sh=p.shadows/100,hi=p.highlights/100,
+    shp=p.sharpen/100,vg=p.vignette/100,sb=p.skinBright/100,sr=p.skinRed/100,smo=p.smooth/100;
+  const cx=w/2,cy=h/2,rr=Math.hypot(cx,cy);
+  for(let i=0,y=0;y<h;y++)for(let x=0;x<w;x++,i++){
+    let r=rgb[i*3],g=rgb[i*3+1],b=rgb[i*3+2];const s=sk[i];
+    if(sm&&s>0){const k=i*3,dr=sm[k]-r,dg=sm[k+1]-g,db=sm[k+2]-b,edge=1-Math.min(1,(Math.abs(dr)+Math.abs(dg)+Math.abs(db))*4);const a=smo*s*edge*.9;r+=dr*a;g+=dg*a;b+=db*a;}
+    if(dt){const k=i*3;r+=(r-dt[k])*shp*1.2;g+=(g-dt[k+1])*shp*1.2;b+=(b-dt[k+2])*shp*1.2;}
+    r*=ex*(1+.10*wa);g*=ex*(1-.07*ti);b*=ex*(1-.10*wa);
+    if(needBase){const B=Math.min(1,(bl[i]*.45+c.L[i]*.55)*ex);let gain=1;
+      if(sh)gain*=1+sh*1.3*Math.pow(1-sstep(0,.6,B),2);
+      if(hi)gain*=1+hi*.55*Math.pow(sstep(.4,1,B),2);
+      r*=gain;g*=gain;b*=gain;}
+    if(co){r=(r-.5)*(1+co)+.5;g=(g-.5)*(1+co)+.5;b=(b-.5)*(1+co)+.5;}
+    if(s>0&&(sb||sr)){const k=1+s*sb*.22;r=r*k+s*sr*.05;g*=k;b=b*k-s*sr*.04;}
+    if(sa||vi){const l=.299*r+.587*g+.114*b,mx=Math.max(r,g,b),mn=Math.min(r,g,b),cur=mx>0?(mx-mn)/mx:0;const f=1+sa+vi*(1-cur)*(1-s*.6);r=l+(r-l)*f;g=l+(g-l)*f;b=l+(b-l)*f;}
+    if(vg){const d=Math.hypot(x-cx,y-cy)/rr,k=1-vg*.5*sstep(.45,1,d);r*=k;g*=k;b*=k;}
+    o[i*4]=r*255;o[i*4+1]=g*255;o[i*4+2]=b*255;o[i*4+3]=255;
+  }
+  return out;
+}
+/* ---------------- auto adjust ---------------- */
+function autoAdjust(presetName){
+  const c=cache,{w,h,L,rgb,sk}=c,n=w*h,hist=new Uint32Array(256);let sum=0,R=0,B=0,skin=0,center=0,cn=0,border=0,bn=0,top=0,tn=0;
+  for(let i=0,y=0;y<h;y++)for(let x=0;x<w;x++,i++){const l=L[i];hist[Math.min(255,l*255|0)]++;sum+=l;R+=rgb[i*3];B+=rgb[i*3+2];if(sk[i]>.5)skin++;
+    const inC=Math.abs(x-w/2)<w*.22&&Math.abs(y-h/2)<h*.22;if(inC){center+=l;cn++;}else{border+=l;bn++;}if(y<h*.25){top+=l;tn++;}}
+  let mR=0,mB=0,mN=0;for(let i=0;i<n;i++){const l=L[i];if(l>.2&&l<.8){mR+=rgb[i*3];mB+=rgb[i*3+2];mN++;}}
+  const pct=q=>{let a=0;for(let k=0;k<256;k++){a+=hist[k];if(a>=n*q)return k/255;}return 1;};
+  const mean=sum/n,p5=pct(.05),p95=pct(.95),clip=(hist[254]+hist[255])/n,darkF=pct(.25)<.15,cm=center/cn,bm=border/bn,tm=top/tn,skinF=skin/n;
+  const backlit=(bm-cm>.12)||(tm>.7&&cm<.42);
+  const q={...P0},why=[];
+  q.ev=Math.max(-1,Math.min(1.2,Math.log2(.46/Math.max(mean,.05))*.7));
+  if(backlit){q.shadows=60;q.highlights=-40;q.ev=Math.max(0,Math.min(q.ev,.3));why.push('逆光を検出したので、暗い部分を明るくして、明るすぎる所を抑えました');}
+  else{q.shadows=darkF?30:10;q.highlights=clip>.02?-40:-10;if(clip>.02)why.push('白飛びしかけている所を抑えました');}
+  if(Math.abs(q.ev)>.25)why.push(q.ev>0?'全体が暗めだったので明るくしました':'全体が明るすぎたので少し暗くしました');
+  q.contrast=(p95-p5)<.6?15:5;
+  const cast=mN>n*.05?(mB-mR)/mN:0;q.warmth=Math.max(-25,Math.min(25,cast*250));if(Math.abs(q.warmth)>8)why.push(q.warmth>0?'青みを取って自然な色にしました':'黄みを少し抑えました');
+  q.vibrance=20;q.sharpen=15;
+  if(skinF>.03){q.smooth=25;q.skinBright=10;why.push('人の肌が写っているので、肌を少しなめらかに明るくしました');}
+  const PRE={料理:{warmth:+10,vibrance:+15,contrast:+5,sharpen:+10},逆光:{shadows:+25,highlights:-15},人物:{smooth:+15,skinBright:+5,warmth:+5,vibrance:-5},風景:{vibrance:+15,highlights:-10,contrast:+10},夜景:{ev:-.2,shadows:+15,highlights:-25,vibrance:+5}};
+  if(presetName&&PRE[presetName]){for(const [k,v] of Object.entries(PRE[presetName]))q[k]=(q[k]||0)+v;why.unshift(`「${presetName}」向けに調整しました`);}
+  if(presetName==='なし'){P={...P0};$('#verdict').textContent='補正をすべて外しました(元の写真のまま)';}
+  else{P=q;$('#verdict').textContent=(why.length?why.join('。'):'大きな問題はありません。少しだけ鮮やかに、くっきりさせました')+'。';}
+  presetSel=presetName||'おまかせ';drawPresets();syncSliders();render();
+}
+let presetSel='おまかせ';
+function drawPresets(){const L=['おまかせ','料理','逆光','人物','風景','夜景','なし'];
+  $('#presets').innerHTML=L.map(l=>`<button type="button" class="chip" aria-pressed="${l===presetSel}">${l}</button>`).join('');
+  $('#presets').querySelectorAll('.chip').forEach((b,i)=>b.onclick=()=>autoAdjust(L[i]==='おまかせ'?undefined:L[i]));}
+/* ---------------- rendering ---------------- */
+let geoCanvas=null,raf=0,showOrig=false,rotCache=null,rotKey='';
+function rotPreview(){const k=G.rot+'|'+base.width;if(rotCache&&rotKey===k)return rotCache;const a=G.aspect;G.aspect=null;const sx=G.cx,sy=G.cy;G.cx=G.cy=.5;
+  rotCache=applyGeo(base,base.width,base.height);G.aspect=a;G.cx=sx;G.cy=sy;rotKey=k;return rotCache;}
+function geoDirty(doRender=true){rotKey='';geoCanvas=applyGeo(base,base.width,base.height);cache=prepare(geoCanvas);if(doRender)render();}
+function schedule(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;render();});}
+function render(){
+  if(!base)return;const v=$('#view'),x=v.getContext('2d');
+  let src;
+  if(tab==='erase'){src=base;}                        // full image (before crop) while erasing
+  else if(tab==='crop'){src=rotPreview();}             // rotated full image while framing
+  else src=showOrig?geoCanvas:null;
+  if(src){v.width=src.width;v.height=src.height;x.drawImage(src,0,0);}
+  else{const img=process(cache,P);v.width=img.width;v.height=img.height;x.putImageData(img,0,0);}
+  layoutOverlay();
+}
+/* overlay canvas sits exactly on top of the view */
+function layoutOverlay(){
+  const v=$('#view'),o=$('#ov'),r=v.getBoundingClientRect(),st=$('#stage').getBoundingClientRect();
+  o.style.left=(r.left-st.left)+'px';o.style.top=(r.top-st.top)+'px';o.style.width=r.width+'px';o.style.height=r.height+'px';
+  const dpr=devicePixelRatio||1;o.width=Math.round(r.width*dpr);o.height=Math.round(r.height*dpr);
+  const x=o.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,r.width,r.height);
+  if(tab==='crop'){const k=r.width/base.width,g=geoRect(base.width,base.height);
+    x.fillStyle='rgba(0,0,0,.55)';x.beginPath();x.rect(0,0,r.width,r.height);x.rect(g.x*k,g.y*k,g.cw*k,g.ch*k);x.fill('evenodd');
+    x.strokeStyle='#ffd23f';x.lineWidth=2;x.strokeRect(g.x*k,g.y*k,g.cw*k,g.ch*k);
+    x.strokeStyle='rgba(255,255,255,.5)';x.lineWidth=1;x.beginPath();for(const t of [1/3,2/3]){x.moveTo((g.x+g.cw*t)*k,g.y*k);x.lineTo((g.x+g.cw*t)*k,(g.y+g.ch)*k);x.moveTo(g.x*k,(g.y+g.ch*t)*k);x.lineTo((g.x+g.cw)*k,(g.y+g.ch*t)*k);}x.stroke();
+  }
+  if(tab==='erase'&&mask){const k=r.width/base.width;x.drawImage(maskCanvas,0,0,r.width,r.height);}
+}
+addEventListener('resize',()=>base&&layoutOverlay());
+/* compare */
+const cmp=$('#cmp');
+cmp.onpointerdown=e=>{e.preventDefault();showOrig=true;render();};
+for(const ev of ['pointerup','pointerleave','pointercancel'])cmp.addEventListener(ev,()=>{if(showOrig){showOrig=false;render();}});
+
+/* ---------------- erase (simple inpainting) ---------------- */
+let mask=null,maskCanvas=document.createElement('canvas'),drawing=false,last=null;
+function clearMask(){mask=null;if(base){maskCanvas.width=base.width;maskCanvas.height=base.height;}layoutOverlay&&base&&layoutOverlay();}
+function toBase(e){const r=$('#view').getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*base.width,y:(e.clientY-r.top)/r.height*base.height,k:base.width/r.width};}
+const stage=$('#stage');let dragStart=null;
+stage.addEventListener('pointerdown',e=>{if(!base||e.target===cmp)return;
+  if(tab==='erase'){drawing=true;stage.setPointerCapture(e.pointerId);if(!mask){mask=new Uint8Array(base.width*base.height);maskCanvas.width=base.width;maskCanvas.height=base.height;}paint(toBase(e));}
+  else if(tab==='crop'){dragStart={p:toBase(e),cx:G.cx,cy:G.cy};stage.setPointerCapture(e.pointerId);}});
+stage.addEventListener('pointermove',e=>{
+  if(drawing){paint(toBase(e));}
+  else if(dragStart){const p=toBase(e);G.cx=dragStart.cx+(p.x-dragStart.p.x)/base.width;G.cy=dragStart.cy+(p.y-dragStart.p.y)/base.height;
+    const g=geoRect(base.width,base.height);G.cx=(g.x+g.cw/2)/base.width;G.cy=(g.y+g.ch/2)/base.height;layoutOverlay();}});
+stage.addEventListener('pointerup',()=>{if(drawing){drawing=false;last=null;}if(dragStart){dragStart=null;geoDirty(false);}});
+function paint(p){
+  const rad=(+$('#brush').value)*p.k/2,mx=maskCanvas.getContext('2d');mx.fillStyle='rgba(255,61,129,.55)';mx.strokeStyle='rgba(255,61,129,.55)';mx.lineCap='round';mx.lineWidth=rad*2;
+  if(last){mx.beginPath();mx.moveTo(last.x,last.y);mx.lineTo(p.x,p.y);mx.stroke();}else{mx.beginPath();mx.arc(p.x,p.y,rad,0,7);mx.fill();}
+  last=p;layoutOverlay();
+}
+function maskFromCanvas(){const d=maskCanvas.getContext('2d').getImageData(0,0,maskCanvas.width,maskCanvas.height).data,m=new Uint8Array(maskCanvas.width*maskCanvas.height);let n=0;
+  for(let i=0;i<m.length;i++)if(d[i*4+3]>20){m[i]=1;n++;}return n?m:null;}
+// fill masked pixels from the outside in (onion peel), then add texture copied from beside the hole
+function inpaint(img,w,h,m){
+  const d=img.data,known=new Uint8Array(w*h);for(let i=0;i<w*h;i++)known[i]=m[i]?0:1;
+  let x0=w,x1=0,y0=h,y1=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(m[y*w+x]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+  const N=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];let left=0;for(let i=0;i<w*h;i++)if(!known[i])left++;
+  let guard=0;
+  while(left>0&&guard++<4000){const fill=[];
+    for(let y=Math.max(0,y0-1);y<=Math.min(h-1,y1+1);y++)for(let x=Math.max(0,x0-1);x<=Math.min(w-1,x1+1);x++){const i=y*w+x;if(known[i])continue;
+      let r=0,g=0,b=0,c=0;for(const [dx,dy] of N){const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=w||Y>=h)continue;const j=Y*w+X;if(known[j]){const wt=(dx&&dy)?.7:1;r+=d[j*4]*wt;g+=d[j*4+1]*wt;b+=d[j*4+2]*wt;c+=wt;}}
+      if(c>=1.5||(c>0&&guard>50))fill.push([i,r/c,g/c,b/c]);}
+    if(!fill.length)break;for(const [i,r,g,b] of fill){d[i*4]=r;d[i*4+1]=g;d[i*4+2]=b;known[i]=1;left--;}}
+  // texture: pick the side (left/right/up/down) with the most known pixels and borrow its fine detail
+  const bw=x1-x0+1,bh=y1-y0+1,opts=[[-bw-4,0],[bw+4,0],[0,-bh-4],[0,bh+4]];let best=null,bestS=-1;
+  for(const [ox,oy] of opts){let s=0;for(let y=y0;y<=y1;y+=2)for(let x=x0;x<=x1;x+=2){const X=x+ox,Y=y+oy;if(X>=0&&Y>=0&&X<w&&Y<h&&!m[Y*w+X])s++;}if(s>bestS){bestS=s;best=[ox,oy];}}
+  if(best){const src=new Float32Array(w*h);for(let i=0;i<w*h;i++)src[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];const bl=boxBlur(src,w,h,2,1);
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const i=y*w+x;if(!m[i])continue;const X=x+best[0],Y=y+best[1];if(X<0||Y<0||X>=w||Y>=h)continue;const j=Y*w+X;const hp=(src[j]-bl[j])*.8;d[i*4]+=hp;d[i*4+1]+=hp;d[i*4+2]+=hp;}}
+}
+function dilate(m,w,h,r){const o=new Uint8Array(m.length);for(let y=0;y<h;y++)for(let x=0;x<w;x++){if(!m[y*w+x])continue;for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h)o[Y*w+X]=1;}}return o;}
+$('#eraseGo').onclick=()=>{const m=maskFromCanvas();if(!m){alertBox('先に、消したい所を指でなぞってください');return;}
+  busy(true);setTimeout(()=>{const w=base.width,h=base.height,x=base.getContext('2d'),img=x.getImageData(0,0,w,h),before=x.getImageData(0,0,w,h);
+    const mm=dilate(m,w,h,2);inpaint(img,w,h,mm);x.putImageData(img,0,0);erasures.push({mask:mm,before});clearMask();geoDirty();busy(false);},30);};
+$('#eraseClear').onclick=()=>{clearMask();};
+$('#eraseUndo').onclick=()=>{const e=erasures.pop();if(!e)return;base.getContext('2d').putImageData(e.before,0,0);geoDirty();};
+
+/* ---------------- export at full resolution ---------------- */
+$('#save').onclick=async()=>{
+  if(!base)return;busy(true);await new Promise(r=>setTimeout(r,30));
+  try{
+    const W0=full.width,H0=full.height,s=Math.min(1,EXPORT_MAX/Math.max(W0,H0)),W=Math.round(W0*s),H=Math.round(H0*s);
+    const big=document.createElement('canvas');big.width=W;big.height=H;const bx=big.getContext('2d');bx.drawImage(full,0,0,W,H);
+    if(erasures.length){ // erased areas: take the filled pixels from the working copy, upscaled, feathered into the full image
+      const m=new Uint8Array(base.width*base.height);for(const e of erasures)for(let i=0;i<m.length;i++)if(e.mask[i])m[i]=1;
+      const mc=document.createElement('canvas');mc.width=base.width;mc.height=base.height;const md=mc.getContext('2d').createImageData(base.width,base.height);
+      for(let i=0;i<m.length;i++){md.data[i*4+3]=m[i]?255:0;}mc.getContext('2d').putImageData(md,0,0);
+      const layer=document.createElement('canvas');layer.width=W;layer.height=H;const lx=layer.getContext('2d');
+      lx.filter='blur('+Math.max(1,W/base.width*1.5)+'px)';lx.drawImage(mc,0,0,W,H);lx.filter='none';lx.globalCompositeOperation='source-in';lx.drawImage(base,0,0,W,H);
+      bx.drawImage(layer,0,0);}
+    const geo=applyGeo(big,W,H);const c=prepare(geo);const out=process(c,P);
+    const oc=document.createElement('canvas');oc.width=out.width;oc.height=out.height;oc.getContext('2d').putImageData(out,0,0);
+    const blob=await new Promise(r=>oc.toBlob(r,'image/jpeg',1.0));
+    lastExport={blob,w:oc.width,h:oc.height};
+    const f=new File([blob],fileName,{type:'image/jpeg'});
+    let shared=false;try{if(navigator.canShare?.({files:[f]})){await navigator.share({files:[f]});shared=true;}}catch(e){if(e.name==='AbortError')shared=true;}
+    if(!shared){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fileName;document.body.appendChild(a);a.click();a.remove();}
+    alertBox(`保存しました(${oc.width}×${oc.height})。`);
+  }catch(err){alertBox('保存に失敗しました。写真が大きすぎる可能性があります。('+(err.message||err)+')');}
+  busy(false);
+};
+let lastExport=null;
+
+/* ---------------- photo handed over from ShotCoach (IndexedDB) ---------------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('shotcoach',1);r.onupgradeneeded=()=>r.result.createObjectStore('handoff');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+(async()=>{if(new URLSearchParams(location.search).get('from')!=='camera')return;
+  try{const db=await idb();const rec=await new Promise((res,rej)=>{const t=db.transaction('handoff','readwrite'),s=t.objectStore('handoff'),g=s.get('photo');g.onsuccess=()=>{s.delete('photo');res(g.result);};g.onerror=()=>rej(g.error);});
+    if(rec&&rec.blob)loadBlob(rec.blob,rec.name);}catch(e){}})();
+drawPresets();
+</script>
+</body>
+</html>

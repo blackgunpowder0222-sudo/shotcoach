@@ -79,7 +79,8 @@ canvas#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .modal{position:fixed;inset:0;z-index:6;background:#000000f2;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px}
 .modal.on{display:flex}
 .modal img,.modal video{max-width:100%;max-height:68vh;border-radius:12px}
-.modal .row{width:100%;max-width:420px}
+.modal .row{width:100%;max-width:420px;flex-wrap:wrap}
+.modal .row button{min-width:calc(50% - 8px)}
 .stillwrap{position:relative;display:inline-block;max-width:100%}
 .stillwrap img{display:block;max-height:62vh}
 .stillwrap svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:12px}
@@ -139,6 +140,7 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   </ul>
   <button class="go" id="go" type="button">カメラを開始</button>
   <a href="plan/" style="color:#ffd23f;font-weight:800;text-decoration:none;text-align:center">撮る順番のリスト(ShotPlan)を開く →</a>
+  <a href="edit/" style="color:#ffd23f;font-weight:800;text-decoration:none;text-align:center">撮った写真を加工する(ShotEdit) →</a>
   <p class="err" id="err" role="alert"></p>
 </div>
 
@@ -163,7 +165,7 @@ button:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
   <div id="prev"></div>
   <div class="minfo" id="mInfo"></div>
   <div class="row2" id="mCropRow" hidden><button class="b2" id="mCrop" type="button">枠で切り抜いて保存</button></div>
-  <div class="row"><button class="b2" id="mClose" type="button">閉じる</button><button class="b2" id="mGhost" type="button">次に重ねる</button><button class="b1" id="mSave" type="button">保存・共有</button></div>
+  <div class="row"><button class="b2" id="mClose" type="button">閉じる</button><button class="b2" id="mGhost" type="button">次に重ねる</button><button class="b2" id="mEdit" type="button">加工する</button><button class="b1" id="mSave" type="button">保存・共有</button></div>
 </div>
 
 <script>
@@ -595,7 +597,7 @@ setInterval(analyze,250);
 let lastBlob=null,lastName='';
 function showResult(blob,name,isVideo){
   lastBlob=blob;lastName=name;const u=URL.createObjectURL(blob);
-  $('#mGhost').hidden=!!isVideo;$('#mInfo').innerHTML='';$('#mCropRow').hidden=true;
+  $('#mGhost').hidden=!!isVideo;$('#mEdit').hidden=!!isVideo;$('#mInfo').innerHTML='';$('#mCropRow').hidden=true;
   $('#prev').innerHTML=isVideo?`<video src="${u}" controls playsinline autoplay loop muted></video>`:`<img src="${u}" alt="撮影した写真">`;
   $('#modal').classList.add('on');
 }
@@ -611,6 +613,14 @@ function takePhoto(){
 $('#shot').onclick=takePhoto;
 $('#mGhost').onclick=()=>{if(!lastBlob||!lastBlob.type.startsWith('image'))return;setGhost(URL.createObjectURL(lastBlob));$('#mClose').click();};
 $('#mClose').onclick=()=>{$('#modal').classList.remove('on');$('#prev').innerHTML='';};
+/* hand the photo to ShotEdit through IndexedDB (same site) */
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open('shotcoach',1);r.onupgradeneeded=()=>r.result.createObjectStore('handoff');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+$('#mEdit').onclick=async()=>{
+  if(!lastBlob||!lastBlob.type.startsWith('image'))return;
+  try{const db=await idbOpen();await new Promise((res,rej)=>{const t=db.transaction('handoff','readwrite');t.objectStore('handoff').put({blob:lastBlob,name:lastName},'photo');t.oncomplete=res;t.onerror=()=>rej(t.error);});
+    location.href='edit/?from=camera';}
+  catch(e){location.href='edit/';}
+};
 
 /* ---- open the iPhone Camera app through a Shortcut (web apps cannot open it directly) ---- */
 const SC_KEY='shotcoach.scSetup',SC_NAME='ShotCoachカメラ';
@@ -650,7 +660,7 @@ $('#nativeFile').onchange=async e=>{
   for(const t of gen.t)svg+=`<circle cx="${cx+cw*t[0]}" cy="${cy+ch*t[1]}" r="${W/90}" fill="#ffd23f"/>`;
   if(res.subj)svg+=`<circle cx="${cx+cw*res.subj.x}" cy="${cy+ch*res.subj.y}" r="${W/30}" fill="none" stroke="#ff3d81" stroke-width="${W/140}"/>`;
   svg+='</svg>';
-  $('#mGhost').hidden=false;
+  $('#mGhost').hidden=false;$('#mEdit').hidden=false;
   $('#prev').innerHTML=`<div class="stillwrap"><img src="${url}" alt="選んだ写真">${svg}</div>`;
   $('#mInfo').innerHTML=`<div class="msg ok"><i></i><span>選んだ写真(${W}×${H})。保存すると元の画質のまま保存されます</span></div>`+res.msgs.map(m=>`<div class="msg ${m.l}"><i></i><span>${m.t}</span></div>`).join('');
   $('#mCropRow').hidden=!fmt.r;$('#mCrop').textContent=`${fmt.n}で切り抜いて保存`;

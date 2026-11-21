@@ -1,0 +1,15 @@
+{
+  "name": "ShotEdit",
+  "short_name": "ShotEdit",
+  "description": "撮った写真の逆光・色・肌・写り込みを整える",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1b1233",
+  "theme_color": "#1b1233",
+  "icons": [
+    {"src": "icon-edit-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-edit-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}
